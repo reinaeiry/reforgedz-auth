@@ -7,7 +7,7 @@
     "start": "node server/index.js",
     "dev": "node server/index.js",
     "keys:generate": "node scripts/generate-keys.js",
-    "manager:create": "node scripts/create-manager.js"
+    "bootstrap": "node scripts/create-manager.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

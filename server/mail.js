@@ -52,9 +52,36 @@ function passwordResetHtml(username, url, ttlHours) {
 </body></html>`;
 }
 
+async function send2faCode(to, code, ttlMinutes) {
+  const t = getTransporter();
+  if (!t) throw new Error("smtp_disabled");
+  const from = process.env.MAIL_FROM || "noreply@reforgedz.net";
+  await t.sendMail({
+    from,
+    to,
+    subject: `ReforgedZ login code: ${code}`,
+    text:
+      `Your one-time login code for ReforgedZ is: ${code}\n\n` +
+      `It expires in ${ttlMinutes} minutes. If you didn't try to sign in, ignore this email and consider changing your password.\n`,
+    html: codeHtml(code, ttlMinutes)
+  });
+}
+
+function codeHtml(code, ttlMinutes) {
+  return `
+<!doctype html><html><body style="background:#0c0c0c;color:#f0f0f0;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif;padding:24px;margin:0">
+<div style="max-width:520px;margin:0 auto;background:#181818;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:28px">
+  <h2 style="color:#cc1f1f;margin:0 0 12px 0;font-weight:600;font-family:Oswald,sans-serif;letter-spacing:2px;text-transform:uppercase">ReforgedZ login code</h2>
+  <p style="color:#aaa;margin:0 0 18px 0">Enter this code to finish signing in:</p>
+  <div style="font-size:34px;letter-spacing:10px;font-weight:700;text-align:center;background:#0c0c0c;border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:18px;color:#fff;font-family:'JetBrains Mono',ui-monospace,monospace">${escapeHtml(code)}</div>
+  <p style="color:#777;font-size:13px;margin:18px 0 0 0">Expires in ${ttlMinutes} minutes. If you didn't try to sign in, ignore this email and consider changing your password.</p>
+</div>
+</body></html>`;
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 function escapeAttr(s) { return escapeHtml(s); }
 
-module.exports = { isEnabled, sendPasswordReset };
+module.exports = { isEnabled, sendPasswordReset, send2faCode };

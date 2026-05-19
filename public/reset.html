@@ -8,76 +8,135 @@
 </head>
 <body>
 <main class="shell">
-  <form class="card" id="form">
+  <form class="card" id="step1">
     <div class="brand">REFORGED<span class="z">Z</span><span class="sub">Password Reset</span></div>
     <h1 class="title">Reset password</h1>
-    <p class="subtitle">Choose a new password for your staff account.</p>
-    <div class="error hidden" id="err"></div>
+    <p class="subtitle">Set a new password for your account.</p>
+    <div class="error hidden" id="err1"></div>
     <div class="field">
       <label>Username</label>
       <input class="input" id="username" disabled />
     </div>
     <div class="field">
       <label for="p1">New password</label>
-      <input class="input" id="p1" type="password" autocomplete="new-password" required minlength="8" />
+      <input class="input" id="p1" type="password" autocomplete="new-password" minlength="8" required />
     </div>
     <div class="field">
       <label for="p2">Confirm password</label>
-      <input class="input" id="p2" type="password" autocomplete="new-password" required minlength="8" />
+      <input class="input" id="p2" type="password" autocomplete="new-password" minlength="8" required />
     </div>
-    <button class="btn block" id="submit" type="submit">Save and sign in</button>
+    <button class="btn block" id="submit1" type="submit">Save and verify email</button>
+  </form>
+
+  <form class="card hidden" id="step2">
+    <div class="brand">REFORGED<span class="z">Z</span><span class="sub">Verify Email</span></div>
+    <h1 class="title">Confirm it's you</h1>
+    <p class="subtitle">We sent a 6-digit code to <strong id="hint"></strong>. Enter it to finish.</p>
+    <div class="error hidden" id="err2"></div>
+    <div class="field">
+      <label for="code">6-digit code</label>
+      <input class="input" id="code" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required style="text-align:center;letter-spacing:8px;font-size:1.3rem" />
+    </div>
+    <button class="btn block" id="submit2" type="submit">Sign in</button>
+    <a href="#" class="muted-link" id="resend">Resend code</a>
   </form>
 </main>
 <script>
 const params = new URLSearchParams(location.search);
 const token = params.get("token");
-const err = document.getElementById("err");
-const submit = document.getElementById("submit");
-
-function showErr(msg) { err.textContent = msg; err.classList.remove("hidden"); }
-function clearErr() { err.classList.add("hidden"); }
+let challengeId = null;
+const $ = (id) => document.getElementById(id);
+function showErr(el, msg) { el.textContent = msg; el.classList.remove("hidden"); }
+function clearErr(el) { el.classList.add("hidden"); }
 
 async function init() {
-  if (!token) return showErr("Missing reset token.");
+  if (!token) return showErr($("err1"), "Missing reset token.");
   const r = await fetch("/api/password/token-info?purpose=reset&token=" + encodeURIComponent(token));
   if (!r.ok) {
-    const d = await r.json().catch(()=>({}));
-    showErr(d.error === "invalid_or_expired" ? "This reset link is invalid or expired." : "Could not verify reset link.");
-    submit.disabled = true;
+    const d = await r.json().catch(() => ({}));
+    showErr($("err1"), d.error === "invalid_or_expired" ? "This reset link is invalid or expired." : "Could not verify reset link.");
+    $("submit1").disabled = true;
     return;
   }
   const data = await r.json();
-  document.getElementById("username").value = data.username;
+  $("username").value = data.username;
+  if (data.emailHint) $("hint").textContent = data.emailHint;
 }
 init();
 
-document.getElementById("form").addEventListener("submit", async (e) => {
+$("step1").addEventListener("submit", async (e) => {
   e.preventDefault();
-  clearErr();
-  const p1 = document.getElementById("p1").value;
-  const p2 = document.getElementById("p2").value;
-  if (p1 !== p2) return showErr("Passwords do not match.");
-  if (p1.length < 8) return showErr("Password must be at least 8 characters.");
-  submit.disabled = true;
-  const res = await fetch("/api/password/redeem", {
+  clearErr($("err1"));
+  const p1 = $("p1").value;
+  const p2 = $("p2").value;
+  if (p1 !== p2) return showErr($("err1"), "Passwords do not match.");
+  if (p1.length < 8) return showErr($("err1"), "Password must be at least 8 characters.");
+  $("submit1").disabled = true;
+  const r = await fetch("/api/password/reset/redeem", {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ token, password: p1, purpose: "reset" })
+    body: JSON.stringify({ token, password: p1 })
   });
-  if (!res.ok) {
-    const d = await res.json().catch(()=>({}));
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
     const map = {
       invalid_or_expired: "This reset link is invalid or expired.",
       password_too_short: "Password must be at least 8 characters.",
       password_too_long: "Password is too long.",
-      rate_limited: "Too many attempts. Try again in a minute."
+      mail_send_failed: "Could not send the verification email. Try again."
     };
-    showErr(map[d.error] || "Could not reset password.");
-    submit.disabled = false;
+    showErr($("err1"), map[data.error] || "Could not reset password.");
+    $("submit1").disabled = false;
+    return;
+  }
+  challengeId = data.challengeId;
+  if (data.emailHint) $("hint").textContent = data.emailHint;
+  $("step1").classList.add("hidden");
+  $("step2").classList.remove("hidden");
+  $("code").focus();
+});
+
+$("step2").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearErr($("err2"));
+  $("submit2").disabled = true;
+  const r = await fetch("/api/auth/2fa/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ challengeId, code: $("code").value.trim() })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const reason = data.reason || data.error;
+    const map = {
+      wrong_code: "Code is incorrect.",
+      expired: "Code expired.",
+      too_many_attempts: "Too many failed attempts.",
+      invalid_challenge: "This reset attempt expired. Start over."
+    };
+    let msg = map[reason] || "Verification failed.";
+    if (typeof data.attemptsRemaining === "number") msg += ` (${data.attemptsRemaining} attempts left)`;
+    showErr($("err2"), msg);
+    $("submit2").disabled = false;
     return;
   }
   location.href = "/account";
+});
+
+$("resend").addEventListener("click", async (e) => {
+  e.preventDefault();
+  const r = await fetch("/api/auth/2fa/resend", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ challengeId })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.ok) {
+    challengeId = data.challengeId;
+    if (data.emailHint) $("hint").textContent = data.emailHint;
+  }
 });
 </script>
 </body>

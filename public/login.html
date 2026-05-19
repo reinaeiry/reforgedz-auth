@@ -8,11 +8,11 @@
 </head>
 <body>
 <main class="shell">
-  <form class="card" id="loginForm" autocomplete="on">
+  <form class="card" id="step1" autocomplete="on">
     <div class="brand">REFORGED<span class="z">Z</span><span class="sub">Staff Authentication</span></div>
     <h1 class="title">Sign in</h1>
-    <p class="subtitle">Single sign-on for all reforgedz.net services.</p>
-    <div class="error hidden" id="err"></div>
+    <p class="subtitle">One login for all reforgedz.net services.</p>
+    <div class="error hidden" id="err1"></div>
     <div class="field">
       <label for="u">Username</label>
       <input class="input" id="u" name="username" autocomplete="username" autofocus required />
@@ -21,60 +21,144 @@
       <label for="p">Password</label>
       <input class="input" id="p" name="password" type="password" autocomplete="current-password" required />
     </div>
-    <button class="btn block" type="submit" id="submit">Sign in</button>
+    <button class="btn block" type="submit" id="submit1">Continue</button>
     <div class="row-between" style="margin-top:14px">
       <a class="muted-link" href="/forgot">Forgot password?</a>
       <span></span>
+    </div>
+  </form>
+
+  <form class="card hidden" id="step2">
+    <div class="brand">REFORGED<span class="z">Z</span><span class="sub">Verify Email</span></div>
+    <h1 class="title">Check your email</h1>
+    <p class="subtitle">We sent a 6-digit code to <strong id="hint"></strong>. Enter it below.</p>
+    <div class="error hidden" id="err2"></div>
+    <div class="field">
+      <label for="code">6-digit code</label>
+      <input class="input" id="code" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required style="text-align:center;letter-spacing:8px;font-size:1.3rem" />
+    </div>
+    <button class="btn block" type="submit" id="submit2">Sign in</button>
+    <div class="row-between" style="margin-top:14px">
+      <a class="muted-link" href="#" id="resend">Resend code</a>
+      <a class="muted-link" href="#" id="back">Use a different account</a>
     </div>
   </form>
 </main>
 <script>
 const params = new URLSearchParams(location.search);
 const returnTo = params.get("return") || "";
-const err = document.getElementById("err");
-const form = document.getElementById("loginForm");
-const submit = document.getElementById("submit");
+let challengeId = null;
 
-function showErr(msg) {
-  err.textContent = msg;
-  err.classList.remove("hidden");
+const $ = (id) => document.getElementById(id);
+function showErr(el, msg) { el.textContent = msg; el.classList.remove("hidden"); }
+function clearErr(el) { el.classList.add("hidden"); }
+function safeReturn() {
+  if (returnTo && /^https?:\/\/[^/]*\.reforgedz\.net(\/|$)/.test(returnTo)) location.href = returnTo;
+  else location.href = "/account";
 }
 
-form.addEventListener("submit", async (e) => {
+$("step1").addEventListener("submit", async (e) => {
   e.preventDefault();
-  err.classList.add("hidden");
-  submit.disabled = true;
+  clearErr($("err1"));
+  $("submit1").disabled = true;
   try {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
       body: JSON.stringify({
-        username: document.getElementById("u").value.trim(),
-        password: document.getElementById("p").value
+        username: $("u").value.trim(),
+        password: $("p").value
       })
     });
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
       const map = {
         invalid_credentials: "Wrong username or password.",
         account_suspended: "This account is suspended. Contact a manager.",
         rate_limited: "Too many attempts. Try again in a minute.",
-        missing_credentials: "Username and password are required."
+        missing_credentials: "Username and password are required.",
+        no_email_on_file: "Your account has no email on file. A manager needs to add one.",
+        mail_send_failed: "Could not send the 2FA code. Try again in a minute."
       };
-      showErr(map[data.error] || "Sign-in failed.");
-      submit.disabled = false;
+      showErr($("err1"), map[data.error] || "Sign-in failed.");
+      $("submit1").disabled = false;
       return;
     }
-    if (returnTo && /^https?:\/\/[^/]*\.reforgedz\.net(\/|$)/.test(returnTo)) {
-      location.href = returnTo;
+    if (data.needs2fa) {
+      challengeId = data.challengeId;
+      $("hint").textContent = data.emailHint || "your inbox";
+      $("step1").classList.add("hidden");
+      $("step2").classList.remove("hidden");
+      $("code").focus();
     } else {
-      location.href = "/account";
+      safeReturn();
     }
-  } catch (e) {
-    showErr("Network error.");
-    submit.disabled = false;
+  } catch {
+    showErr($("err1"), "Network error.");
+    $("submit1").disabled = false;
   }
+});
+
+$("step2").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearErr($("err2"));
+  $("submit2").disabled = true;
+  try {
+    const res = await fetch("/api/auth/2fa/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ challengeId, code: $("code").value.trim() })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const reason = data.reason || data.error;
+      const map = {
+        wrong_code: "Code is incorrect.",
+        expired: "Code expired. Request a new one.",
+        already_used: "This code was already used.",
+        too_many_attempts: "Too many failed attempts. Request a new code.",
+        invalid_challenge: "This sign-in attempt expired. Start over.",
+        rate_limited: "Too many attempts. Try again in a minute."
+      };
+      let msg = map[reason] || "Verification failed.";
+      if (typeof data.attemptsRemaining === "number") msg += ` (${data.attemptsRemaining} attempts left)`;
+      showErr($("err2"), msg);
+      $("submit2").disabled = false;
+      return;
+    }
+    safeReturn();
+  } catch {
+    showErr($("err2"), "Network error.");
+    $("submit2").disabled = false;
+  }
+});
+
+$("resend").addEventListener("click", async (e) => {
+  e.preventDefault();
+  clearErr($("err2"));
+  const r = await fetch("/api/auth/2fa/resend", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ challengeId })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.ok) {
+    challengeId = data.challengeId;
+    $("hint").textContent = data.emailHint || "your inbox";
+  } else {
+    showErr($("err2"), "Could not resend. Start over.");
+  }
+});
+
+$("back").addEventListener("click", (e) => {
+  e.preventDefault();
+  $("step2").classList.add("hidden");
+  $("step1").classList.remove("hidden");
+  $("submit1").disabled = false;
+  $("p").value = "";
+  $("code").value = "";
 });
 </script>
 </body>

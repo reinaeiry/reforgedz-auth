@@ -3,12 +3,13 @@ const db = require("../db");
 const session = require("../session");
 const { normalizePerms } = require("../perms");
 const mail = require("../mail");
+const reqctx = require("../reqctx");
 
 const router = express.Router();
 
 router.use(session.requireAuth, session.requireManager);
 
-const USERNAME_RE = /^[a-zA-Z0-9_.-]{2,32}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function publicUser(user) {
   return {
@@ -25,9 +26,9 @@ function publicUser(user) {
   };
 }
 
-function setupLinkFor(token) {
+function inviteLinkFor(token) {
   const origin = process.env.PUBLIC_ORIGIN || "https://auth.reforgedz.net";
-  return `${origin}/setup?token=${encodeURIComponent(token)}`;
+  return `${origin}/setup?invite=${encodeURIComponent(token)}`;
 }
 
 function resetLinkFor(token) {
@@ -35,54 +36,15 @@ function resetLinkFor(token) {
   return `${origin}/reset?token=${encodeURIComponent(token)}`;
 }
 
-function clientIp(req) {
-  return (req.headers["cf-connecting-ip"] || req.ip || "").toString();
-}
+// ─── Existing user list / edit ───────────────────────────────────────────────
 
 router.get("/", (req, res) => {
   res.json({ users: db.listUsers().map(publicUser) });
 });
 
-router.post("/", (req, res) => {
-  const actor = req.session.user;
-  const { username, email, isManager, perms } = req.body || {};
-  if (!username || !USERNAME_RE.test(String(username).trim())) {
-    return res.status(400).json({ error: "invalid_username" });
-  }
-  const existing = db.getUserByUsername(String(username).trim());
-  if (existing) return res.status(409).json({ error: "username_taken" });
-
-  const created = db.createUser({
-    username: String(username).trim(),
-    email: email || null,
-    isManager: !!isManager,
-    perms: normalizePerms(perms || {}),
-    createdBy: actor.id
-  });
-
-  const ttlHours = parseInt(process.env.SETUP_TOKEN_TTL_HOURS || "24", 10);
-  const { token, expiresAt } = db.createToken({
-    userId: created.id,
-    purpose: "setup",
-    ttlMs: ttlHours * 3600 * 1000
-  });
-  const url = setupLinkFor(token);
-
-  db.logAudit({
-    actorId: actor.id,
-    actorUsername: actor.username,
-    action: "user.create",
-    targetUserId: created.id,
-    targetUsername: created.username,
-    detail: { isManager: !!isManager, hasEmail: !!created.email },
-    ip: clientIp(req)
-  });
-
-  res.json({ user: publicUser(created), setupUrl: url, setupExpiresAt: expiresAt });
-});
-
 router.patch("/:id", (req, res) => {
   const actor = req.session.user;
+  const ctx = reqctx.build(req);
   const id = parseInt(req.params.id, 10);
   const target = db.getUserById(id);
   if (!target) return res.status(404).json({ error: "not_found" });
@@ -90,8 +52,12 @@ router.patch("/:id", (req, res) => {
   const patch = {};
   const detail = {};
   if (req.body.email !== undefined) {
-    patch.email = req.body.email;
-    detail.email = !!req.body.email;
+    const newEmail = req.body.email ? String(req.body.email).trim() : "";
+    if (!newEmail || !EMAIL_RE.test(newEmail)) {
+      return res.status(400).json({ error: "email_required" });
+    }
+    patch.email = newEmail;
+    detail.email = true;
   }
   if (req.body.isManager !== undefined) {
     if (target.id === actor.id && !req.body.isManager) {
@@ -121,13 +87,14 @@ router.patch("/:id", (req, res) => {
     targetUserId: updated.id,
     targetUsername: updated.username,
     detail,
-    ip: clientIp(req)
+    ctx
   });
   res.json({ user: publicUser(updated) });
 });
 
 router.post("/:id/reset", async (req, res) => {
   const actor = req.session.user;
+  const ctx = reqctx.build(req);
   const id = parseInt(req.params.id, 10);
   const target = db.getUserById(id);
   if (!target) return res.status(404).json({ error: "not_found" });
@@ -158,41 +125,15 @@ router.post("/:id/reset", async (req, res) => {
     targetUserId: target.id,
     targetUsername: target.username,
     detail: { emailed, hasEmail: !!target.email },
-    ip: clientIp(req)
+    ctx
   });
 
   res.json({ resetUrl: url, expiresAt, emailed });
 });
 
-router.post("/:id/setup-link", (req, res) => {
-  const actor = req.session.user;
-  const id = parseInt(req.params.id, 10);
-  const target = db.getUserById(id);
-  if (!target) return res.status(404).json({ error: "not_found" });
-
-  db.invalidateUserTokens(id, "setup");
-  const ttlHours = parseInt(process.env.SETUP_TOKEN_TTL_HOURS || "24", 10);
-  const { token, expiresAt } = db.createToken({
-    userId: id,
-    purpose: "setup",
-    ttlMs: ttlHours * 3600 * 1000
-  });
-  const url = setupLinkFor(token);
-
-  db.logAudit({
-    actorId: actor.id,
-    actorUsername: actor.username,
-    action: "user.setup_link",
-    targetUserId: target.id,
-    targetUsername: target.username,
-    ip: clientIp(req)
-  });
-
-  res.json({ setupUrl: url, expiresAt });
-});
-
 router.post("/:id/revoke", (req, res) => {
   const actor = req.session.user;
+  const ctx = reqctx.build(req);
   const id = parseInt(req.params.id, 10);
   const target = db.getUserById(id);
   if (!target) return res.status(404).json({ error: "not_found" });
@@ -204,13 +145,14 @@ router.post("/:id/revoke", (req, res) => {
     action: "user.revoke",
     targetUserId: target.id,
     targetUsername: target.username,
-    ip: clientIp(req)
+    ctx
   });
   res.json({ user: publicUser(updated) });
 });
 
 router.delete("/:id", (req, res) => {
   const actor = req.session.user;
+  const ctx = reqctx.build(req);
   const id = parseInt(req.params.id, 10);
   const target = db.getUserById(id);
   if (!target) return res.status(404).json({ error: "not_found" });
@@ -223,7 +165,63 @@ router.delete("/:id", (req, res) => {
     action: "user.delete",
     targetUserId: target.id,
     targetUsername: target.username,
-    ip: clientIp(req)
+    ctx
+  });
+  res.json({ ok: true });
+});
+
+// ─── Invitations ─────────────────────────────────────────────────────────────
+
+router.get("/invites/list", (req, res) => {
+  const rows = db.listInvitations().map((r) => ({
+    id: r.id,
+    label: r.label,
+    isManager: !!r.is_manager,
+    perms: r.perms_json ? JSON.parse(r.perms_json) : null,
+    expiresAt: r.expires_at,
+    consumedAt: r.consumed_at,
+    consumedUsername: r.consumed_username,
+    createdByUsername: r.created_by_username,
+    createdAt: r.created_at,
+    status: r.consumed_at ? "redeemed" : (r.expires_at < Date.now() ? "expired" : "pending")
+  }));
+  res.json({ invitations: rows });
+});
+
+router.post("/invites", (req, res) => {
+  const actor = req.session.user;
+  const ctx = reqctx.build(req);
+  const { perms, isManager, label } = req.body || {};
+  const ttlHours = parseInt(process.env.INVITE_TTL_HOURS || "72", 10);
+  const { id, token, expiresAt } = db.createInvitation({
+    perms: perms || {},
+    isManager: !!isManager,
+    label: label || null,
+    createdBy: actor.id,
+    ttlMs: ttlHours * 3600 * 1000
+  });
+  const url = inviteLinkFor(token);
+  db.logAudit({
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "invite.create",
+    detail: { invitationId: id, label: label || null, isManager: !!isManager },
+    ctx
+  });
+  res.json({ invitationId: id, inviteUrl: url, expiresAt, ttlHours });
+});
+
+router.delete("/invites/:id", (req, res) => {
+  const actor = req.session.user;
+  const ctx = reqctx.build(req);
+  const id = parseInt(req.params.id, 10);
+  db.revokeInvitation(id);
+  db.logAudit({
+    actorId: actor.id,
+    actorUsername: actor.username,
+    action: "invite.revoke",
+    detail: { invitationId: id },
+    ctx
   });
   res.json({ ok: true });
 });

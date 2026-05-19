@@ -45,6 +45,21 @@ function migrate() {
     );
     CREATE INDEX IF NOT EXISTS idx_setup_tokens_user ON setup_tokens(user_id);
 
+    CREATE TABLE IF NOT EXISTS invitations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token TEXT UNIQUE NOT NULL,
+      perms_json TEXT NOT NULL,
+      is_manager INTEGER NOT NULL DEFAULT 0,
+      label TEXT,
+      expires_at INTEGER NOT NULL,
+      consumed_at INTEGER,
+      consumed_user_id INTEGER,
+      created_by INTEGER,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token);
+    CREATE INDEX IF NOT EXISTS idx_invitations_expires ON invitations(expires_at);
+
     CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       actor_id INTEGER,
@@ -332,6 +347,57 @@ function purgeExpiredPending() {
   open().prepare("DELETE FROM pending_logins WHERE expires_at < ?").run(Date.now() - 24 * 3600 * 1000);
 }
 
+function createInvitation({ perms, isManager, label, createdBy, ttlMs }) {
+  const crypto = require("crypto");
+  const { normalizePerms } = require("./perms");
+  const token = crypto.randomBytes(32).toString("base64url");
+  const now = Date.now();
+  const info = open()
+    .prepare(
+      `INSERT INTO invitations (token, perms_json, is_manager, label, expires_at, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      token,
+      JSON.stringify(normalizePerms(perms || {})),
+      isManager ? 1 : 0,
+      label || null,
+      now + ttlMs,
+      createdBy || null,
+      now
+    );
+  return { id: info.lastInsertRowid, token, expiresAt: now + ttlMs };
+}
+
+function getInvitationByToken(token) {
+  return open().prepare("SELECT * FROM invitations WHERE token = ?").get(token);
+}
+
+function consumeInvitation(token, userId) {
+  open()
+    .prepare("UPDATE invitations SET consumed_at = ?, consumed_user_id = ? WHERE token = ?")
+    .run(Date.now(), userId, token);
+}
+
+function listInvitations() {
+  return open()
+    .prepare(`
+      SELECT i.*, u.username AS consumed_username, c.username AS created_by_username
+      FROM invitations i
+      LEFT JOIN users u ON u.id = i.consumed_user_id
+      LEFT JOIN users c ON c.id = i.created_by
+      ORDER BY i.created_at DESC
+    `)
+    .all();
+}
+
+function revokeInvitation(id) {
+  // Soft-revoke: bump expires_at into the past.
+  open()
+    .prepare("UPDATE invitations SET expires_at = ? WHERE id = ? AND consumed_at IS NULL")
+    .run(Date.now() - 1, id);
+}
+
 function safeParse(s) {
   try {
     return JSON.parse(s);
@@ -358,5 +424,10 @@ module.exports = {
   getPendingLogin,
   consumePendingLogin,
   bumpPendingAttempts,
-  purgeExpiredPending
+  purgeExpiredPending,
+  createInvitation,
+  getInvitationByToken,
+  consumeInvitation,
+  listInvitations,
+  revokeInvitation
 };

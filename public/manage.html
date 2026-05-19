@@ -13,19 +13,19 @@
 </header>
 <nav class="tabs">
   <button class="tab active" data-tab="users">Users</button>
+  <button class="tab" data-tab="invites">Invitations</button>
   <button class="tab" data-tab="audit">Audit log</button>
 </nav>
 
 <section class="page" id="tab-users">
   <div class="toolbar">
     <input class="input" id="filter" placeholder="Filter by username, email, permission…" />
-    <button class="btn" id="newBtn">+ New user</button>
     <button class="btn ghost" id="reloadBtn">Reload</button>
   </div>
   <div class="layout">
     <div class="table-card">
       <table class="users">
-        <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Last login</th></tr></thead>
+        <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th></tr></thead>
         <tbody id="usersBody"></tbody>
       </table>
     </div>
@@ -34,10 +34,10 @@
       <div id="editorBody" class="hidden">
         <div class="field">
           <label>Username</label>
-          <input class="input" id="eu" />
+          <input class="input" id="eu" disabled />
         </div>
         <div class="field">
-          <label>Email (optional, enables self-service reset)</label>
+          <label>Email</label>
           <input class="input" id="eemail" type="email" />
         </div>
         <div class="field">
@@ -74,11 +74,64 @@
 
         <div class="actions">
           <button class="btn" id="saveBtn">Save</button>
-          <button class="btn ghost" id="setupLinkBtn">Generate setup link</button>
-          <button class="btn ghost" id="resetBtn">Reset password</button>
+          <button class="btn ghost" id="resetBtn">Send reset link</button>
           <button class="btn danger" id="revokeBtn">Revoke sessions</button>
-          <button class="btn danger" id="deleteBtn">Delete</button>
+          <button class="btn danger" id="deleteBtn">Delete user</button>
         </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="page hidden" id="tab-invites">
+  <div class="toolbar">
+    <div class="grow"></div>
+    <button class="btn" id="newInviteBtn">+ Create invitation</button>
+    <button class="btn ghost" id="reloadInvites">Reload</button>
+  </div>
+  <div class="layout">
+    <div class="table-card">
+      <table class="users">
+        <thead><tr><th>Label</th><th>Role</th><th>Status</th><th>Created</th><th>Expires</th></tr></thead>
+        <tbody id="invitesBody"></tbody>
+      </table>
+    </div>
+    <div class="panel" id="inviteEditor">
+      <h2 id="inviteEditorTitle">New invitation</h2>
+      <p class="subtitle" style="margin-bottom:14px">
+        Generate a one-time link the new staff member opens. They'll enter their own username + email + password and confirm with a 6-digit code we email them.
+      </p>
+      <div class="field">
+        <label>Label / note (optional)</label>
+        <input class="input" id="iLabel" placeholder="e.g. for IRISH" />
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="iMgr" /> Manager (can manage users)
+        </label>
+      </div>
+      <div class="perm-group">
+        <div class="label">Admin panel access</div>
+        <div class="perm-grid" id="iPermAdmin"></div>
+      </div>
+      <div class="perm-group">
+        <div class="label">Transcripts</div>
+        <div class="perm-grid" id="iPermTranscripts"></div>
+      </div>
+      <div class="perm-group">
+        <div class="label">Restricted</div>
+        <div class="perm-grid" id="iPermRestricted"></div>
+      </div>
+
+      <div class="notice hidden" id="inviteLinkBox">
+        <div>Invite link (valid until expiry — share via Discord / DM):</div>
+        <code class="link" id="inviteLink"></code>
+        <button class="btn sm ghost" id="copyInviteLink">Copy</button>
+      </div>
+      <div class="error hidden" id="inviteErr"></div>
+
+      <div class="actions">
+        <button class="btn" id="createInviteBtn">Generate invite link</button>
       </div>
     </div>
   </div>
@@ -86,7 +139,7 @@
 
 <section class="page hidden" id="tab-audit">
   <div class="toolbar">
-    <div class="grow"></div>
+    <input class="input" id="auditFilter" placeholder="Filter by user, action, IP, location, device…" />
     <button class="btn ghost" id="auditReload">Reload</button>
   </div>
   <div class="panel" id="auditList"></div>
