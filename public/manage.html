@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Manage staff — ReforgedZ Auth</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">REFORGED<span class="z">Z</span> <span class="sub" style="display:inline;margin-left:8px">Auth Console</span></div>
+  <div class="who">Signed in as <strong id="who">…</strong> · <a class="muted-link" href="/account">Account</a> · <a class="muted-link" href="#" id="logout">Sign out</a></div>
+</header>
+<nav class="tabs">
+  <button class="tab active" data-tab="users">Users</button>
+  <button class="tab" data-tab="audit">Audit log</button>
+</nav>
+
+<section class="page" id="tab-users">
+  <div class="toolbar">
+    <input class="input" id="filter" placeholder="Filter by username, email, permission…" />
+    <button class="btn" id="newBtn">+ New user</button>
+    <button class="btn ghost" id="reloadBtn">Reload</button>
+  </div>
+  <div class="layout">
+    <div class="table-card">
+      <table class="users">
+        <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Last login</th></tr></thead>
+        <tbody id="usersBody"></tbody>
+      </table>
+    </div>
+    <div class="panel" id="editor">
+      <h2 id="editorTitle">Select a user</h2>
+      <div id="editorBody" class="hidden">
+        <div class="field">
+          <label>Username</label>
+          <input class="input" id="eu" />
+        </div>
+        <div class="field">
+          <label>Email (optional, enables self-service reset)</label>
+          <input class="input" id="eemail" type="email" />
+        </div>
+        <div class="field">
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0">
+            <input type="checkbox" id="emgr" /> Manager (can manage users)
+          </label>
+        </div>
+        <div class="field">
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0">
+            <input type="checkbox" id="esusp" /> Suspended (blocked from signing in)
+          </label>
+        </div>
+
+        <div class="perm-group">
+          <div class="label">Admin panel access</div>
+          <div class="perm-grid" id="permAdmin"></div>
+        </div>
+        <div class="perm-group">
+          <div class="label">Transcripts</div>
+          <div class="perm-grid" id="permTranscripts"></div>
+        </div>
+        <div class="perm-group">
+          <div class="label">Restricted</div>
+          <div class="perm-grid" id="permRestricted"></div>
+        </div>
+
+        <div class="notice hidden" id="linkBox">
+          <div>One-time link (share via Discord / DM):</div>
+          <code class="link" id="oneTimeLink"></code>
+          <button class="btn sm ghost" id="copyLink">Copy</button>
+        </div>
+        <div class="error hidden" id="editorErr"></div>
+        <div class="notice hidden" id="editorOk"></div>
+
+        <div class="actions">
+          <button class="btn" id="saveBtn">Save</button>
+          <button class="btn ghost" id="setupLinkBtn">Generate setup link</button>
+          <button class="btn ghost" id="resetBtn">Reset password</button>
+          <button class="btn danger" id="revokeBtn">Revoke sessions</button>
+          <button class="btn danger" id="deleteBtn">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="page hidden" id="tab-audit">
+  <div class="toolbar">
+    <div class="grow"></div>
+    <button class="btn ghost" id="auditReload">Reload</button>
+  </div>
+  <div class="panel" id="auditList"></div>
+</section>
+
+<script src="/manage.js"></script>
+</body>
+</html>

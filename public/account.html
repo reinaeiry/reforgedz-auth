@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Account — ReforgedZ</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<main class="shell">
+  <div class="card" id="card">
+    <div class="brand">REFORGED<span class="z">Z</span><span class="sub">Staff Account</span></div>
+    <h1 class="title" id="who">…</h1>
+    <p class="subtitle" id="role"></p>
+    <div class="error hidden" id="err"></div>
+
+    <div class="panel" style="margin-top:8px;background:var(--bg-dark)">
+      <div class="perm-group">
+        <div class="label">Your access</div>
+        <div id="permChips"></div>
+      </div>
+    </div>
+
+    <h2 style="font-family:var(--display);font-size:.95rem;letter-spacing:2px;text-transform:uppercase;margin:20px 0 8px;color:var(--text-dim)">Change password</h2>
+    <form id="cpwForm">
+      <div class="field">
+        <label for="cur">Current password</label>
+        <input class="input" id="cur" type="password" autocomplete="current-password" required />
+      </div>
+      <div class="field">
+        <label for="np1">New password</label>
+        <input class="input" id="np1" type="password" autocomplete="new-password" required minlength="8" />
+      </div>
+      <div class="field">
+        <label for="np2">Confirm new password</label>
+        <input class="input" id="np2" type="password" autocomplete="new-password" required minlength="8" />
+      </div>
+      <div class="notice hidden" id="cpwOk">Password updated. All other sessions have been signed out.</div>
+      <button class="btn block" id="cpwSubmit" type="submit">Change password</button>
+    </form>
+
+    <div class="row-between" style="margin-top:18px">
+      <a class="muted-link" href="#" id="logout">Sign out</a>
+      <a class="muted-link" id="mgrLink" href="/manage" style="display:none">Manage users →</a>
+    </div>
+  </div>
+</main>
+<script>
+const err = document.getElementById("err");
+function showErr(msg) { err.textContent = msg; err.classList.remove("hidden"); }
+function clearErr() { err.classList.add("hidden"); }
+
+const PERM_LABELS = {
+  admin: {
+    replay:"Replay", admin:"Admin tools", dev:"Dev", players:"Players",
+    bans:"Bans", mutes:"Mutes", events:"Events", health:"Health",
+    playerLookup:"Player Lookup", pii:"PII", gmManagement:"GM Management"
+  },
+  transcripts: { read:"View transcripts", delete:"Delete transcripts", appeals:"Ban appeal transcripts" },
+  restricted: { access:"Restricted area" }
+};
+
+function renderChips(perms) {
+  const chips = [];
+  if (perms.manager) chips.push(`<span class="chip mgr">Manager</span>`);
+  for (const k of Object.keys(PERM_LABELS.admin)) if (perms.admin[k]) chips.push(`<span class="chip on">Admin · ${PERM_LABELS.admin[k]}</span>`);
+  for (const k of Object.keys(PERM_LABELS.transcripts)) if (perms.transcripts[k]) chips.push(`<span class="chip on">Transcripts · ${PERM_LABELS.transcripts[k]}</span>`);
+  for (const k of Object.keys(PERM_LABELS.restricted)) if (perms.restricted[k]) chips.push(`<span class="chip on">Restricted · ${PERM_LABELS.restricted[k]}</span>`);
+  if (chips.length === 0) chips.push(`<span class="chip">No access yet</span>`);
+  return chips.join("");
+}
+
+async function load() {
+  const r = await fetch("/api/auth/me", { credentials: "include" });
+  if (!r.ok) { location.href = "/login"; return; }
+  const { user } = await r.json();
+  document.getElementById("who").textContent = user.username;
+  document.getElementById("role").textContent = user.isManager ? "Manager" : "Staff";
+  document.getElementById("permChips").innerHTML = renderChips(user.perms);
+  if (user.isManager) document.getElementById("mgrLink").style.display = "";
+}
+load();
+
+document.getElementById("logout").addEventListener("click", async (e) => {
+  e.preventDefault();
+  await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+  location.href = "/login";
+});
+
+document.getElementById("cpwForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearErr();
+  document.getElementById("cpwOk").classList.add("hidden");
+  const cur = document.getElementById("cur").value;
+  const p1 = document.getElementById("np1").value;
+  const p2 = document.getElementById("np2").value;
+  if (p1 !== p2) return showErr("New passwords do not match.");
+  if (p1.length < 8) return showErr("Password must be at least 8 characters.");
+  const btn = document.getElementById("cpwSubmit");
+  btn.disabled = true;
+  const r = await fetch("/api/password/change", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ current: cur, password: p1 })
+  });
+  btn.disabled = false;
+  if (!r.ok) {
+    const d = await r.json().catch(()=>({}));
+    const map = {
+      invalid_current_password: "Current password is wrong.",
+      password_too_short: "Password must be at least 8 characters.",
+      password_too_long: "Password is too long."
+    };
+    return showErr(map[d.error] || "Could not change password.");
+  }
+  document.getElementById("cpwForm").reset();
+  document.getElementById("cpwOk").classList.remove("hidden");
+});
+</script>
+</body>
+</html>

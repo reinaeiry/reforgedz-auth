@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reset password — ReforgedZ</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<main class="shell">
+  <form class="card" id="form">
+    <div class="brand">REFORGED<span class="z">Z</span><span class="sub">Password Reset</span></div>
+    <h1 class="title">Reset password</h1>
+    <p class="subtitle">Choose a new password for your staff account.</p>
+    <div class="error hidden" id="err"></div>
+    <div class="field">
+      <label>Username</label>
+      <input class="input" id="username" disabled />
+    </div>
+    <div class="field">
+      <label for="p1">New password</label>
+      <input class="input" id="p1" type="password" autocomplete="new-password" required minlength="8" />
+    </div>
+    <div class="field">
+      <label for="p2">Confirm password</label>
+      <input class="input" id="p2" type="password" autocomplete="new-password" required minlength="8" />
+    </div>
+    <button class="btn block" id="submit" type="submit">Save and sign in</button>
+  </form>
+</main>
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get("token");
+const err = document.getElementById("err");
+const submit = document.getElementById("submit");
+
+function showErr(msg) { err.textContent = msg; err.classList.remove("hidden"); }
+function clearErr() { err.classList.add("hidden"); }
+
+async function init() {
+  if (!token) return showErr("Missing reset token.");
+  const r = await fetch("/api/password/token-info?purpose=reset&token=" + encodeURIComponent(token));
+  if (!r.ok) {
+    const d = await r.json().catch(()=>({}));
+    showErr(d.error === "invalid_or_expired" ? "This reset link is invalid or expired." : "Could not verify reset link.");
+    submit.disabled = true;
+    return;
+  }
+  const data = await r.json();
+  document.getElementById("username").value = data.username;
+}
+init();
+
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearErr();
+  const p1 = document.getElementById("p1").value;
+  const p2 = document.getElementById("p2").value;
+  if (p1 !== p2) return showErr("Passwords do not match.");
+  if (p1.length < 8) return showErr("Password must be at least 8 characters.");
+  submit.disabled = true;
+  const res = await fetch("/api/password/redeem", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ token, password: p1, purpose: "reset" })
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(()=>({}));
+    const map = {
+      invalid_or_expired: "This reset link is invalid or expired.",
+      password_too_short: "Password must be at least 8 characters.",
+      password_too_long: "Password is too long.",
+      rate_limited: "Too many attempts. Try again in a minute."
+    };
+    showErr(map[d.error] || "Could not reset password.");
+    submit.disabled = false;
+    return;
+  }
+  location.href = "/account";
+});
+</script>
+</body>
+</html>

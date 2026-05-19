@@ -1,0 +1,23 @@
+{
+  "name": "reforgedz-auth",
+  "version": "1.0.0",
+  "description": "Unified SSO for *.reforgedz.net (admin, transcripts, restricted)",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "keys:generate": "node scripts/generate-keys.js",
+    "manager:create": "node scripts/create-manager.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.0.0",
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "geoip-lite": "^1.4.10",
+    "nodemailer": "^6.9.14",
+    "ua-parser-js": "^1.0.39"
+  }
+}

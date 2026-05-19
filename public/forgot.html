@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Forgot password — ReforgedZ</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<main class="shell">
+  <form class="card" id="form">
+    <div class="brand">REFORGED<span class="z">Z</span><span class="sub">Password Recovery</span></div>
+    <h1 class="title">Forgot password</h1>
+    <p class="subtitle">If your account has an email on file, we'll send a reset link.</p>
+    <div class="notice hidden" id="ok">If that account exists and has an email on file, a reset link has been sent.</div>
+    <div class="field">
+      <label for="u">Username</label>
+      <input class="input" id="u" name="username" required autofocus />
+    </div>
+    <button class="btn block" id="submit" type="submit">Send reset link</button>
+    <a class="muted-link" href="/login">Back to sign in</a>
+  </form>
+</main>
+<script>
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  document.getElementById("submit").disabled = true;
+  await fetch("/api/password/forgot", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: document.getElementById("u").value.trim() })
+  });
+  document.getElementById("ok").classList.remove("hidden");
+});
+</script>
+</body>
+</html>

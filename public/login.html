@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sign in — ReforgedZ</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<main class="shell">
+  <form class="card" id="loginForm" autocomplete="on">
+    <div class="brand">REFORGED<span class="z">Z</span><span class="sub">Staff Authentication</span></div>
+    <h1 class="title">Sign in</h1>
+    <p class="subtitle">Single sign-on for all reforgedz.net services.</p>
+    <div class="error hidden" id="err"></div>
+    <div class="field">
+      <label for="u">Username</label>
+      <input class="input" id="u" name="username" autocomplete="username" autofocus required />
+    </div>
+    <div class="field">
+      <label for="p">Password</label>
+      <input class="input" id="p" name="password" type="password" autocomplete="current-password" required />
+    </div>
+    <button class="btn block" type="submit" id="submit">Sign in</button>
+    <div class="row-between" style="margin-top:14px">
+      <a class="muted-link" href="/forgot">Forgot password?</a>
+      <span></span>
+    </div>
+  </form>
+</main>
+<script>
+const params = new URLSearchParams(location.search);
+const returnTo = params.get("return") || "";
+const err = document.getElementById("err");
+const form = document.getElementById("loginForm");
+const submit = document.getElementById("submit");
+
+function showErr(msg) {
+  err.textContent = msg;
+  err.classList.remove("hidden");
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  err.classList.add("hidden");
+  submit.disabled = true;
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        username: document.getElementById("u").value.trim(),
+        password: document.getElementById("p").value
+      })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const map = {
+        invalid_credentials: "Wrong username or password.",
+        account_suspended: "This account is suspended. Contact a manager.",
+        rate_limited: "Too many attempts. Try again in a minute.",
+        missing_credentials: "Username and password are required."
+      };
+      showErr(map[data.error] || "Sign-in failed.");
+      submit.disabled = false;
+      return;
+    }
+    if (returnTo && /^https?:\/\/[^/]*\.reforgedz\.net(\/|$)/.test(returnTo)) {
+      location.href = returnTo;
+    } else {
+      location.href = "/account";
+    }
+  } catch (e) {
+    showErr("Network error.");
+    submit.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
