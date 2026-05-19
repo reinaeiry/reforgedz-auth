@@ -18,6 +18,22 @@ const app = express();
 const trust = parseInt(process.env.TRUST_PROXY || "1", 10);
 if (!Number.isNaN(trust) && trust > 0) app.set("trust proxy", trust);
 
+// CORS for cross-subdomain fetches from admin.reforgedz.net / transcripts.reforgedz.net.
+// Must echo the exact Origin (not "*") because we send credentials.
+const ALLOWED_ORIGIN_RE = /^https?:\/\/(?:[a-z0-9-]+\.)*reforgedz\.net$/i;
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGIN_RE.test(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Vary", "Origin");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 app.use(express.json({ limit: "32kb" }));
 app.use(cookieParser());
 
