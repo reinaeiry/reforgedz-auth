@@ -2,7 +2,8 @@ const PERMS = {
   admin: [
     ["replay","Replay"],
     ["gmManagement","GM Management"],
-    ["moderation","Moderation panel access (gate)"]
+    ["moderation","Moderation panel access (gate)"],
+    ["tickets","Tickets panel access (gate)"]
   ],
   transcripts: [
     ["read","View transcripts"],
@@ -19,6 +20,17 @@ const PERMS = {
     ["kick","Kick players"],
     ["ban","Ban players"],
     ["manage","Manage banlists / triggers (v2)"]
+  ],
+  tickets: [
+    ["devApplications","Dev Applications"],
+    ["gmApplications","GM Applications"],
+    ["banAppeals","Ban Appeals"],
+    ["na1","NA1 Support"],
+    ["na2","NA2 Support"],
+    ["eu1","EU1 Support"],
+    ["eu2","EU2 Support"],
+    ["shopSupport","Shop Support"],
+    ["managementSupport","Management Support"]
   ]
 };
 
@@ -34,7 +46,7 @@ const LOG_SCOPES = {
   ALL: { label: "Global (base)", types: [["base","Base"]] }
 };
 
-const GROUPS = ["admin", "transcripts", "moderation"];
+const GROUPS = ["admin", "transcripts", "moderation", "tickets"];
 
 const state = {
   me: null,
@@ -90,7 +102,7 @@ function buildLogScopeGrid(containerId, perms, prefix) {
 }
 
 function readPermGrid(prefix) {
-  const out = { admin:{}, transcripts:{}, moderation:{} };
+  const out = { admin:{}, transcripts:{}, moderation:{}, tickets:{} };
   out.moderation.logs = {};
   for (const group of GROUPS) {
     for (const [key] of PERMS[group]) {
@@ -109,7 +121,7 @@ function readPermGrid(prefix) {
 }
 
 function emptyPerms() {
-  const out = { admin:{}, transcripts:{}, moderation:{} };
+  const out = { admin:{}, transcripts:{}, moderation:{}, tickets:{} };
   out.moderation.logs = {};
   for (const group of GROUPS) {
     for (const [key] of PERMS[group]) out[group][key] = false;
@@ -200,6 +212,7 @@ function selectUser(id) {
   buildPermGrid("permTranscripts", "transcripts", u.perms, "u");
   buildPermGrid("permModeration", "moderation", u.perms, "u");
   buildLogScopeGrid("permModerationLogs", u.perms, "u");
+  buildPermGrid("permTickets", "tickets", u.perms, "u");
   renderUserList();
 }
 
@@ -337,6 +350,7 @@ function startNewInvite() {
   buildPermGrid("iPermTranscripts", "transcripts", empty, "i");
   buildPermGrid("iPermModeration", "moderation", empty, "i");
   buildLogScopeGrid("iPermModerationLogs", empty, "i");
+  buildPermGrid("iPermTickets", "tickets", empty, "i");
 }
 
 async function createInvite() {

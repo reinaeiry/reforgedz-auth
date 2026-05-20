@@ -54,7 +54,8 @@ const PERM_LABELS = {
   admin: {
     replay:"Replay",
     gmManagement:"GM Management",
-    moderation:"Moderation panel"
+    moderation:"Moderation panel",
+    tickets:"Tickets panel"
   },
   transcripts: {
     read:"View transcripts",
@@ -82,6 +83,17 @@ const PERM_LABELS = {
     NA:  { label: "NA region", types: { anticheat: "Anticheat", shop: "Shop" } },
     EU:  { label: "EU region", types: { anticheat: "Anticheat", shop: "Shop" } },
     ALL: { label: "Global", types: { base: "Base" } }
+  },
+  tickets: {
+    devApplications: "Dev Applications",
+    gmApplications: "GM Applications",
+    banAppeals: "Ban Appeals",
+    na1: "NA1 Support",
+    na2: "NA2 Support",
+    eu1: "EU1 Support",
+    eu2: "EU2 Support",
+    shopSupport: "Shop Support",
+    managementSupport: "Management Support"
   }
 };
 
@@ -98,6 +110,8 @@ function renderChips(perms) {
       if (logs[scope] && logs[scope][t]) chips.push(`<span class="chip on">${info.label} · ${tLabel}</span>`);
     }
   }
+  const tickets = perms.tickets || {};
+  for (const k of Object.keys(PERM_LABELS.tickets)) if (tickets[k]) chips.push(`<span class="chip on">Tickets · ${PERM_LABELS.tickets[k]}</span>`);
   if (chips.length === 0) chips.push(`<span class="chip">No access yet</span>`);
   return chips.join("");
 }

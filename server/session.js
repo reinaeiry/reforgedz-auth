@@ -33,6 +33,7 @@ function buildPerms(user) {
     transcripts: user.perms.transcripts,
     moderation: mod,
     battlemetrics: mod,
+    tickets: user.perms.tickets || {},
     manager: user.isManager
   };
 }

@@ -4,7 +4,8 @@
 const ADMIN_TOOLS = [
   "replay",
   "gmManagement",
-  "moderation"
+  "moderation",
+  "tickets"
 ];
 
 const TRANSCRIPT_PERMS = ["read", "stats", "restricted"];
@@ -32,6 +33,21 @@ const MODERATION_PERMS = [
 // A user with only EU1 staff role can be granted scope=EU1 (kill/chat) only,
 // or also scope=EU (anticheat/shop) if they handle moderation across both
 // EU servers, etc.
+// Ticket categories — one boolean per Discord ticket type. A user with
+// only `tickets.na1 = true` only sees NA1 Support tickets in the relay tab.
+// Closing requires `manager` or `moderation.manage`, not a separate perm.
+const TICKET_CATEGORIES = [
+  "devApplications",
+  "gmApplications",
+  "banAppeals",
+  "na1",
+  "na2",
+  "eu1",
+  "eu2",
+  "shopSupport",
+  "managementSupport"
+];
+
 const LOG_SCOPES = {
   NA1: ["kill", "chat"],
   NA2: ["kill", "chat"],
@@ -55,7 +71,9 @@ function emptyPerms() {
     moderation.logs[scope] = {};
     for (const t of LOG_SCOPES[scope]) moderation.logs[scope][t] = false;
   }
-  return { admin, transcripts, moderation };
+  const tickets = {};
+  for (const cat of TICKET_CATEGORIES) tickets[cat] = false;
+  return { admin, transcripts, moderation, tickets };
 }
 
 function normalizePerms(input) {
@@ -119,6 +137,16 @@ function normalizePerms(input) {
     }
     if (anyMod) out.admin.moderation = true;
   }
+
+  // Tickets — read the per-category booleans.
+  if (input.tickets && typeof input.tickets === "object") {
+    for (const cat of TICKET_CATEGORIES) out.tickets[cat] = !!input.tickets[cat];
+  }
+  // Auto-grant the admin.tickets gate when any category is enabled,
+  // so existing data stays consistent without explicit re-saves.
+  if (!out.admin.tickets && TICKET_CATEGORIES.some((cat) => out.tickets[cat])) {
+    out.admin.tickets = true;
+  }
   return out;
 }
 
@@ -128,6 +156,7 @@ module.exports = {
   MODERATION_PERMS,
   LOG_SCOPES,
   LOG_SCOPE_KEYS,
+  TICKET_CATEGORIES,
   BATTLEMETRICS_PERMS: MODERATION_PERMS,
   emptyPerms,
   normalizePerms
