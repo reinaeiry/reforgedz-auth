@@ -10,6 +10,7 @@ const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const passwordRoutes = require("./routes/password");
 const auditRoutes = require("./routes/audit");
+const internalAuditRoutes = require("./routes/internal-audit");
 
 loadKeys();
 db.open();
@@ -43,6 +44,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/password", passwordRoutes);
 app.use("/api/audit", auditRoutes);
+app.use("/api/internal/audit", internalAuditRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, ts: Date.now() }));
 

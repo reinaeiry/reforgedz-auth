@@ -27,6 +27,7 @@ function buildPerms(user) {
   return {
     admin: user.perms.admin,
     transcripts: user.perms.transcripts,
+    battlemetrics: user.perms.battlemetrics,
     manager: user.isManager
   };
 }

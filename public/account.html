@@ -52,12 +52,26 @@ function clearErr() { err.classList.add("hidden"); }
 
 const PERM_LABELS = {
   admin: {
-    replay:"Replay", gmManagement:"GM Management"
+    replay:"Replay",
+    gmManagement:"GM Management",
+    viewIngameIps:"Ingame-log IPs (reserved)"
   },
   transcripts: {
     read:"View transcripts",
     stats:"Admin stats",
     restricted:"Access Restricted Transcripts"
+  },
+  battlemetrics: {
+    viewServers:"View servers",
+    viewPlayers:"View players",
+    viewSessions:"View sessions / IPs",
+    viewChat:"View chat",
+    viewActivity:"View activity",
+    viewBans:"View bans",
+    writeNotes:"Write notes",
+    kick:"Kick",
+    ban:"Ban",
+    manage:"Manage (v2)"
   }
 };
 
@@ -66,6 +80,7 @@ function renderChips(perms) {
   if (perms.manager) chips.push(`<span class="chip mgr">Manager</span>`);
   for (const k of Object.keys(PERM_LABELS.admin)) if (perms.admin[k]) chips.push(`<span class="chip on">Admin · ${PERM_LABELS.admin[k]}</span>`);
   for (const k of Object.keys(PERM_LABELS.transcripts)) if (perms.transcripts[k]) chips.push(`<span class="chip on">Transcripts · ${PERM_LABELS.transcripts[k]}</span>`);
+  for (const k of Object.keys(PERM_LABELS.battlemetrics)) if (perms.battlemetrics && perms.battlemetrics[k]) chips.push(`<span class="chip on">BattleMetrics · ${PERM_LABELS.battlemetrics[k]}</span>`);
   if (chips.length === 0) chips.push(`<span class="chip">No access yet</span>`);
   return chips.join("");
 }

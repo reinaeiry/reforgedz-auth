@@ -1,12 +1,25 @@
 const PERMS = {
   admin: [
     ["replay","Replay"],
-    ["gmManagement","GM Management"]
+    ["gmManagement","GM Management"],
+    ["viewIngameIps","View ingame-log IPs (reserved)"]
   ],
   transcripts: [
     ["read","View transcripts"],
     ["stats","Admin stats"],
     ["restricted","Access Restricted Transcripts"]
+  ],
+  battlemetrics: [
+    ["viewServers","View server status"],
+    ["viewPlayers","View players (basic)"],
+    ["viewSessions","View sessions / IPs / Steam (PII)"],
+    ["viewChat","View chat logs"],
+    ["viewActivity","View activity feed"],
+    ["viewBans","View bans"],
+    ["writeNotes","Write player notes"],
+    ["kick","Kick players"],
+    ["ban","Ban players"],
+    ["manage","Manage banlists / triggers (v2)"]
   ]
 };
 
@@ -37,8 +50,8 @@ function buildPermGrid(containerId, group, perms, prefix) {
 }
 
 function readPermGrid(prefix) {
-  const out = { admin:{}, transcripts:{} };
-  for (const group of ["admin","transcripts"]) {
+  const out = { admin:{}, transcripts:{}, battlemetrics:{} };
+  for (const group of ["admin","transcripts","battlemetrics"]) {
     for (const [key] of PERMS[group]) {
       const el = $(`${prefix}_${group}_${key}`);
       out[group][key] = !!(el && el.checked);
@@ -48,8 +61,8 @@ function readPermGrid(prefix) {
 }
 
 function emptyPerms() {
-  const out = { admin:{}, transcripts:{} };
-  for (const group of ["admin","transcripts"]) {
+  const out = { admin:{}, transcripts:{}, battlemetrics:{} };
+  for (const group of ["admin","transcripts","battlemetrics"]) {
     for (const [key] of PERMS[group]) out[group][key] = false;
   }
   return out;
@@ -77,7 +90,7 @@ function userMatchesFilter(u, q) {
   q = q.toLowerCase();
   if (u.username.toLowerCase().includes(q)) return true;
   if ((u.email || "").toLowerCase().includes(q)) return true;
-  for (const group of ["admin","transcripts"]) {
+  for (const group of ["admin","transcripts","battlemetrics"]) {
     for (const [key,label] of PERMS[group]) {
       if (u.perms[group] && u.perms[group][key] && label.toLowerCase().includes(q)) return true;
     }
@@ -122,6 +135,7 @@ function selectUser(id) {
   $("esusp").checked = u.suspended;
   buildPermGrid("permAdmin", "admin", u.perms, "u");
   buildPermGrid("permTranscripts", "transcripts", u.perms, "u");
+  buildPermGrid("permBattlemetrics", "battlemetrics", u.perms, "u");
   renderUserList();
 }
 
@@ -257,6 +271,7 @@ function startNewInvite() {
   const empty = emptyPerms();
   buildPermGrid("iPermAdmin", "admin", empty, "i");
   buildPermGrid("iPermTranscripts", "transcripts", empty, "i");
+  buildPermGrid("iPermBattlemetrics", "battlemetrics", empty, "i");
 }
 
 async function createInvite() {
