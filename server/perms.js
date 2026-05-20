@@ -21,7 +21,14 @@ const MODERATION_PERMS = [
   "writeNotes",
   "kick",
   "ban",
-  "manage"
+  "manage",
+  // In-game bans/mutes are read from / written to each game-server's
+  // ReforgedZBans.json / ReforgedZMutes.json over SSH. Distinct from
+  // BattleMetrics bans (covered by `ban` above).
+  "viewIngameBans",
+  "editIngameBans",
+  "viewIngameMutes",
+  "editIngameMutes"
 ];
 
 // Log perms are scoped per game-server because the Discord channels carry

@@ -19,7 +19,11 @@ const PERMS = {
     ["writeNotes","Write player notes"],
     ["kick","Kick players"],
     ["ban","Ban players"],
-    ["manage","Manage banlists / triggers (v2)"]
+    ["manage","Manage banlists / triggers (v2)"],
+    ["viewIngameBans","View in-game bans (ReforgedZBans.json)"],
+    ["editIngameBans","Add / edit / remove in-game bans"],
+    ["viewIngameMutes","View in-game mutes (ReforgedZMutes.json)"],
+    ["editIngameMutes","Add / edit / remove in-game mutes"]
   ],
   tickets: [
     ["devApplications","Dev Applications"],
