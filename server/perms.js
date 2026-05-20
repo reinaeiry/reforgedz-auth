@@ -11,9 +11,6 @@ const TRANSCRIPT_PERMS = ["read", "stats", "restricted"];
 
 // `viewIps` is the single PII gate: BM IPs + in-game-log IPs + IP-ban CRUD.
 // Steam IDs, hardware IDs, and session history are surfaced under viewPlayers.
-// Was `battlemetrics` in the old shape — renamed to avoid confusion with the
-// BM external service. JWT shape preserves the old key for back-compat
-// (forward-migrated by normalizePerms).
 const MODERATION_PERMS = [
   "viewServers",
   "viewPlayers",
@@ -26,9 +23,25 @@ const MODERATION_PERMS = [
   "manage"
 ];
 
-// Per-log-type filters live under moderation.logs.* — gated independently
-// so e.g. a junior mod can see kill/death/chat but not anticheat or base.
-const LOG_LEVEL_PERMS = ["kill", "death", "anticheat", "shop", "chat", "base"];
+// Log perms are scoped per game-server because the Discord channels carry
+// different log volumes per server:
+//   NA1/NA2/EU1/EU2 — per-server kill + chat logs
+//   NA, EU         — region-wide anticheat + shop logs (one channel each)
+//   ALL            — global base log (one channel, all servers)
+//
+// A user with only EU1 staff role can be granted scope=EU1 (kill/chat) only,
+// or also scope=EU (anticheat/shop) if they handle moderation across both
+// EU servers, etc.
+const LOG_SCOPES = {
+  NA1: ["kill", "chat"],
+  NA2: ["kill", "chat"],
+  EU1: ["kill", "chat"],
+  EU2: ["kill", "chat"],
+  NA:  ["anticheat", "shop"],
+  EU:  ["anticheat", "shop"],
+  ALL: ["base"]
+};
+const LOG_SCOPE_KEYS = Object.keys(LOG_SCOPES);
 
 function emptyPerms() {
   const admin = {};
@@ -38,7 +51,10 @@ function emptyPerms() {
   const moderation = {};
   for (const k of MODERATION_PERMS) moderation[k] = false;
   moderation.logs = {};
-  for (const k of LOG_LEVEL_PERMS) moderation.logs[k] = false;
+  for (const scope of LOG_SCOPE_KEYS) {
+    moderation.logs[scope] = {};
+    for (const t of LOG_SCOPES[scope]) moderation.logs[scope][t] = false;
+  }
   return { admin, transcripts, moderation };
 }
 
@@ -52,7 +68,7 @@ function normalizePerms(input) {
     for (const k of TRANSCRIPT_PERMS) out.transcripts[k] = !!input.transcripts[k];
   }
   // Read moderation directly, or forward-migrate from the legacy
-  // `battlemetrics` key. Anything we set in both wins on the new side.
+  // `battlemetrics` key.
   const modSrc = (input.moderation && typeof input.moderation === "object")
     ? input.moderation
     : (input.battlemetrics && typeof input.battlemetrics === "object")
@@ -60,31 +76,47 @@ function normalizePerms(input) {
       : null;
   if (modSrc) {
     for (const k of MODERATION_PERMS) out.moderation[k] = !!modSrc[k];
-    // Older flag `viewSessions` collapsed into `viewIps`.
     if (modSrc.viewSessions) out.moderation.viewIps = true;
-    if (modSrc.logs && typeof modSrc.logs === "object") {
-      for (const k of LOG_LEVEL_PERMS) out.moderation.logs[k] = !!modSrc.logs[k];
-    }
-    // If user has viewActivity but no granular log perms yet, grant all.
-    // Mirrors the prior behaviour where viewActivity was the only gate.
-    if (modSrc.viewActivity && !modSrc.logs) {
-      for (const k of LOG_LEVEL_PERMS) out.moderation.logs[k] = true;
+
+    const logsSrc = (modSrc.logs && typeof modSrc.logs === "object") ? modSrc.logs : null;
+    if (logsSrc) {
+      // Detect whether the old flat shape was used (logs.kill, logs.chat, ...)
+      // or the new nested per-scope shape (logs.NA1.kill, ...).
+      const flatTypes = ["kill", "death", "anticheat", "shop", "chat", "base"];
+      const looksFlat = flatTypes.some((t) => typeof logsSrc[t] === "boolean");
+      if (looksFlat) {
+        for (const scope of LOG_SCOPE_KEYS) {
+          for (const t of LOG_SCOPES[scope]) {
+            out.moderation.logs[scope][t] = !!logsSrc[t];
+          }
+        }
+      } else {
+        for (const scope of LOG_SCOPE_KEYS) {
+          const srcScope = logsSrc[scope] || {};
+          for (const t of LOG_SCOPES[scope]) out.moderation.logs[scope][t] = !!srcScope[t];
+        }
+      }
+    } else if (modSrc.viewActivity) {
+      // No granular log perms set yet — fall back to viewActivity granting all.
+      for (const scope of LOG_SCOPE_KEYS) {
+        for (const t of LOG_SCOPES[scope]) out.moderation.logs[scope][t] = true;
+      }
     }
   }
-  // Forward-migration of older flags that no longer exist:
-  //   restricted.access   -> transcripts.restricted
-  //   admin.viewIngameIps -> moderation.viewIps
   if (input.restricted && typeof input.restricted === "object" && input.restricted.access) {
     out.transcripts.restricted = true;
   }
   if (input.admin && input.admin.viewIngameIps) {
     out.moderation.viewIps = true;
   }
-  // If a user has ANY moderation perm but no admin.moderation gate set,
-  // grant the gate automatically so existing users don't lose access.
   if (!out.admin.moderation) {
-    const anyMod = MODERATION_PERMS.some((k) => out.moderation[k]) ||
-                   LOG_LEVEL_PERMS.some((k) => out.moderation.logs[k]);
+    let anyMod = MODERATION_PERMS.some((k) => out.moderation[k]);
+    if (!anyMod) {
+      for (const scope of LOG_SCOPE_KEYS) {
+        for (const t of LOG_SCOPES[scope]) if (out.moderation.logs[scope][t]) { anyMod = true; break; }
+        if (anyMod) break;
+      }
+    }
     if (anyMod) out.admin.moderation = true;
   }
   return out;
@@ -94,8 +126,8 @@ module.exports = {
   ADMIN_TOOLS,
   TRANSCRIPT_PERMS,
   MODERATION_PERMS,
-  LOG_LEVEL_PERMS,
-  // Back-compat alias (some imports may still reach for this).
+  LOG_SCOPES,
+  LOG_SCOPE_KEYS,
   BATTLEMETRICS_PERMS: MODERATION_PERMS,
   emptyPerms,
   normalizePerms

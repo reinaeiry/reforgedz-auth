@@ -317,6 +317,33 @@ table.users tr.selected { background: var(--accent-dim); }
 }
 .perm-grid label:hover { color: #fff; }
 
+/* Per-server log scope rows. */
+.log-scope-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  margin-bottom: 6px;
+}
+.log-scope-label {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-family: var(--display);
+  letter-spacing: 0.5px;
+}
+.log-scope-types { display: flex; gap: 18px; flex-wrap: wrap; }
+.log-scope-types label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  user-select: none;
+}
+.log-scope-types label:hover { color: #fff; }
+
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 
 .audit-row {

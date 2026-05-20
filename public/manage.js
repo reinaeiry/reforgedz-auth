@@ -19,20 +19,22 @@ const PERMS = {
     ["kick","Kick players"],
     ["ban","Ban players"],
     ["manage","Manage banlists / triggers (v2)"]
-  ],
-  // Sub-group: log-level filters. UI shows these as their own grid but the
-  // values write into perms.moderation.logs.<key>.
-  moderationLogs: [
-    ["kill","Kill logs"],
-    ["death","Death logs"],
-    ["anticheat","Anticheat logs"],
-    ["shop","Shop logs"],
-    ["chat","Chat logs"],
-    ["base","Base logs"]
   ]
 };
 
-const GROUPS = ["admin", "transcripts", "moderation", "moderationLogs"];
+// Per-server log gates. Each scope has only the log types that channel
+// actually produces. Written into perms.moderation.logs[scope][type].
+const LOG_SCOPES = {
+  NA1: { label: "NA1 (kill + chat)", types: [["kill","Kill"],["chat","Chat"]] },
+  NA2: { label: "NA2 (kill + chat)", types: [["kill","Kill"],["chat","Chat"]] },
+  EU1: { label: "EU1 (kill + chat)", types: [["kill","Kill"],["chat","Chat"]] },
+  EU2: { label: "EU2 (kill + chat)", types: [["kill","Kill"],["chat","Chat"]] },
+  NA:  { label: "NA region (anticheat + shop)", types: [["anticheat","Anticheat"],["shop","Shop"]] },
+  EU:  { label: "EU region (anticheat + shop)", types: [["anticheat","Anticheat"],["shop","Shop"]] },
+  ALL: { label: "Global (base)", types: [["base","Base"]] }
+};
+
+const GROUPS = ["admin", "transcripts", "moderation"];
 
 const state = {
   me: null,
@@ -49,21 +51,41 @@ const hide = (el) => el.classList.add("hidden");
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtDate = (ms) => ms ? new Date(ms).toLocaleString() : "—";
 
-function readGroupSource(group, perms) {
-  // moderationLogs draws/writes from perms.moderation.logs
-  if (group === "moderationLogs") return (perms.moderation && perms.moderation.logs) || {};
-  return perms[group] || {};
-}
-
 function buildPermGrid(containerId, group, perms, prefix) {
   const c = $(containerId);
   c.innerHTML = "";
-  const src = readGroupSource(group, perms);
+  const src = perms[group] || {};
   for (const [key, label] of PERMS[group]) {
     const id = `${prefix}_${group}_${key}`;
     const row = document.createElement("label");
     row.innerHTML = `<input type="checkbox" id="${id}" ${src[key] ? "checked" : ""}><span>${label}</span>`;
     c.appendChild(row);
+  }
+}
+
+// Per-server logs grid — one row of checkboxes per scope.
+function buildLogScopeGrid(containerId, perms, prefix) {
+  const c = $(containerId);
+  c.innerHTML = "";
+  const logs = (perms.moderation && perms.moderation.logs) || {};
+  for (const [scope, info] of Object.entries(LOG_SCOPES)) {
+    const wrap = document.createElement("div");
+    wrap.className = "log-scope-row";
+    const head = document.createElement("div");
+    head.className = "log-scope-label";
+    head.textContent = info.label;
+    wrap.appendChild(head);
+    const grid = document.createElement("div");
+    grid.className = "log-scope-types";
+    for (const [type, typeLabel] of info.types) {
+      const id = `${prefix}_logs_${scope}_${type}`;
+      const lbl = document.createElement("label");
+      const on = !!(logs[scope] && logs[scope][type]);
+      lbl.innerHTML = `<input type="checkbox" id="${id}" ${on ? "checked" : ""}><span>${typeLabel}</span>`;
+      grid.appendChild(lbl);
+    }
+    wrap.appendChild(grid);
+    c.appendChild(wrap);
   }
 }
 
@@ -73,9 +95,14 @@ function readPermGrid(prefix) {
   for (const group of GROUPS) {
     for (const [key] of PERMS[group]) {
       const el = $(`${prefix}_${group}_${key}`);
-      const v = !!(el && el.checked);
-      if (group === "moderationLogs") out.moderation.logs[key] = v;
-      else out[group][key] = v;
+      out[group][key] = !!(el && el.checked);
+    }
+  }
+  for (const [scope, info] of Object.entries(LOG_SCOPES)) {
+    out.moderation.logs[scope] = {};
+    for (const [type] of info.types) {
+      const el = $(`${prefix}_logs_${scope}_${type}`);
+      out.moderation.logs[scope][type] = !!(el && el.checked);
     }
   }
   return out;
@@ -85,10 +112,11 @@ function emptyPerms() {
   const out = { admin:{}, transcripts:{}, moderation:{} };
   out.moderation.logs = {};
   for (const group of GROUPS) {
-    for (const [key] of PERMS[group]) {
-      if (group === "moderationLogs") out.moderation.logs[key] = false;
-      else out[group][key] = false;
-    }
+    for (const [key] of PERMS[group]) out[group][key] = false;
+  }
+  for (const [scope, info] of Object.entries(LOG_SCOPES)) {
+    out.moderation.logs[scope] = {};
+    for (const [type] of info.types) out.moderation.logs[scope][type] = false;
   }
   return out;
 }
@@ -116,9 +144,18 @@ function userMatchesFilter(u, q) {
   if (u.username.toLowerCase().includes(q)) return true;
   if ((u.email || "").toLowerCase().includes(q)) return true;
   for (const group of GROUPS) {
-    const src = readGroupSource(group, u.perms);
+    const src = u.perms[group] || {};
     for (const [key,label] of PERMS[group]) {
       if (src[key] && label.toLowerCase().includes(q)) return true;
+    }
+  }
+  // Match against any per-server log perm label too ("EU1", "kill", etc).
+  const logs = (u.perms.moderation && u.perms.moderation.logs) || {};
+  for (const [scope, info] of Object.entries(LOG_SCOPES)) {
+    if (info.label.toLowerCase().includes(q)) {
+      for (const [type] of info.types) {
+        if (logs[scope] && logs[scope][type]) return true;
+      }
     }
   }
   return false;
@@ -162,7 +199,7 @@ function selectUser(id) {
   buildPermGrid("permAdmin", "admin", u.perms, "u");
   buildPermGrid("permTranscripts", "transcripts", u.perms, "u");
   buildPermGrid("permModeration", "moderation", u.perms, "u");
-  buildPermGrid("permModerationLogs", "moderationLogs", u.perms, "u");
+  buildLogScopeGrid("permModerationLogs", u.perms, "u");
   renderUserList();
 }
 
@@ -299,7 +336,7 @@ function startNewInvite() {
   buildPermGrid("iPermAdmin", "admin", empty, "i");
   buildPermGrid("iPermTranscripts", "transcripts", empty, "i");
   buildPermGrid("iPermModeration", "moderation", empty, "i");
-  buildPermGrid("iPermModerationLogs", "moderationLogs", empty, "i");
+  buildLogScopeGrid("iPermModerationLogs", empty, "i");
 }
 
 async function createInvite() {

@@ -72,13 +72,16 @@ const PERM_LABELS = {
     ban:"Ban",
     manage:"Manage (v2)"
   },
-  moderationLogs: {
-    kill:"Kill logs",
-    death:"Death logs",
-    anticheat:"Anticheat logs",
-    shop:"Shop logs",
-    chat:"Chat logs",
-    base:"Base logs"
+  // Per-server log scopes — each entry maps a scope key to its label + the
+  // log types that channel produces.
+  moderationLogScopes: {
+    NA1: { label: "NA1", types: { kill: "Kill", chat: "Chat" } },
+    NA2: { label: "NA2", types: { kill: "Kill", chat: "Chat" } },
+    EU1: { label: "EU1", types: { kill: "Kill", chat: "Chat" } },
+    EU2: { label: "EU2", types: { kill: "Kill", chat: "Chat" } },
+    NA:  { label: "NA region", types: { anticheat: "Anticheat", shop: "Shop" } },
+    EU:  { label: "EU region", types: { anticheat: "Anticheat", shop: "Shop" } },
+    ALL: { label: "Global", types: { base: "Base" } }
   }
 };
 
@@ -89,7 +92,12 @@ function renderChips(perms) {
   for (const k of Object.keys(PERM_LABELS.transcripts)) if (perms.transcripts && perms.transcripts[k]) chips.push(`<span class="chip on">Transcripts · ${PERM_LABELS.transcripts[k]}</span>`);
   const mod = perms.moderation || perms.battlemetrics || {};
   for (const k of Object.keys(PERM_LABELS.moderation)) if (mod[k]) chips.push(`<span class="chip on">Moderation · ${PERM_LABELS.moderation[k]}</span>`);
-  for (const k of Object.keys(PERM_LABELS.moderationLogs)) if (mod.logs && mod.logs[k]) chips.push(`<span class="chip on">Logs · ${PERM_LABELS.moderationLogs[k]}</span>`);
+  const logs = mod.logs || {};
+  for (const [scope, info] of Object.entries(PERM_LABELS.moderationLogScopes)) {
+    for (const [t, tLabel] of Object.entries(info.types)) {
+      if (logs[scope] && logs[scope][t]) chips.push(`<span class="chip on">${info.label} · ${tLabel}</span>`);
+    }
+  }
   if (chips.length === 0) chips.push(`<span class="chip">No access yet</span>`);
   return chips.join("");
 }
