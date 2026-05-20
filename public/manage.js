@@ -5,10 +5,9 @@ const PERMS = {
   ],
   transcripts: [
     ["read","View transcripts"],
-    ["delete","Delete transcripts"],
-    ["appeals","Ban appeal transcripts"]
-  ],
-  restricted: [["access","Restricted area"]]
+    ["stats","Admin stats"],
+    ["restricted","Access Restricted Transcripts"]
+  ]
 };
 
 const state = {
@@ -38,8 +37,8 @@ function buildPermGrid(containerId, group, perms, prefix) {
 }
 
 function readPermGrid(prefix) {
-  const out = { admin:{}, transcripts:{}, restricted:{} };
-  for (const group of ["admin","transcripts","restricted"]) {
+  const out = { admin:{}, transcripts:{} };
+  for (const group of ["admin","transcripts"]) {
     for (const [key] of PERMS[group]) {
       const el = $(`${prefix}_${group}_${key}`);
       out[group][key] = !!(el && el.checked);
@@ -49,8 +48,8 @@ function readPermGrid(prefix) {
 }
 
 function emptyPerms() {
-  const out = { admin:{}, transcripts:{}, restricted:{} };
-  for (const group of ["admin","transcripts","restricted"]) {
+  const out = { admin:{}, transcripts:{} };
+  for (const group of ["admin","transcripts"]) {
     for (const [key] of PERMS[group]) out[group][key] = false;
   }
   return out;
@@ -78,7 +77,7 @@ function userMatchesFilter(u, q) {
   q = q.toLowerCase();
   if (u.username.toLowerCase().includes(q)) return true;
   if ((u.email || "").toLowerCase().includes(q)) return true;
-  for (const group of ["admin","transcripts","restricted"]) {
+  for (const group of ["admin","transcripts"]) {
     for (const [key,label] of PERMS[group]) {
       if (u.perms[group] && u.perms[group][key] && label.toLowerCase().includes(q)) return true;
     }
@@ -123,7 +122,6 @@ function selectUser(id) {
   $("esusp").checked = u.suspended;
   buildPermGrid("permAdmin", "admin", u.perms, "u");
   buildPermGrid("permTranscripts", "transcripts", u.perms, "u");
-  buildPermGrid("permRestricted", "restricted", u.perms, "u");
   renderUserList();
 }
 
@@ -259,7 +257,6 @@ function startNewInvite() {
   const empty = emptyPerms();
   buildPermGrid("iPermAdmin", "admin", empty, "i");
   buildPermGrid("iPermTranscripts", "transcripts", empty, "i");
-  buildPermGrid("iPermRestricted", "restricted", empty, "i");
 }
 
 async function createInvite() {
