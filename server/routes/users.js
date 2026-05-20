@@ -65,10 +65,14 @@ router.patch("/:id", (req, res) => {
     }
     patch.isManager = !!req.body.isManager;
     detail.isManager = patch.isManager;
+    // isManager lives in the JWT — force the user to re-login so it takes effect.
+    patch.bumpTokenVersion = true;
   }
   if (req.body.perms !== undefined) {
     patch.perms = normalizePerms(req.body.perms);
     detail.permsChanged = true;
+    // Perms live in the JWT — force the user to re-login so the new perms apply.
+    patch.bumpTokenVersion = true;
   }
   if (req.body.suspended !== undefined) {
     if (target.id === actor.id && req.body.suspended) {
