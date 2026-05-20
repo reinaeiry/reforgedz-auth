@@ -1,14 +1,5 @@
 const ADMIN_TOOLS = [
   "replay",
-  "admin",
-  "dev",
-  "players",
-  "bans",
-  "mutes",
-  "events",
-  "health",
-  "playerLookup",
-  "pii",
   "gmManagement"
 ];
 

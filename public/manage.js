@@ -1,8 +1,7 @@
 const PERMS = {
   admin: [
-    ["replay","Replay"],["players","Players"],["bans","Bans"],["mutes","Mutes"],
-    ["events","Events"],["health","Health"],["playerLookup","Player Lookup"],
-    ["pii","PII"],["gmManagement","GM Management"],["dev","Dev"],["admin","Admin tools"]
+    ["replay","Replay"],
+    ["gmManagement","GM Management"]
   ],
   transcripts: [
     ["read","View transcripts"],
