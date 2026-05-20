@@ -24,10 +24,15 @@ function cookieName() {
 }
 
 function buildPerms(user) {
+  // Ship both `moderation` (new) and `battlemetrics` (legacy) so consumers
+  // on older builds keep working through the rollout window. Drop the alias
+  // once admin + transcripts are confirmed on the new key.
+  const mod = user.perms.moderation || user.perms.battlemetrics || {};
   return {
     admin: user.perms.admin,
     transcripts: user.perms.transcripts,
-    battlemetrics: user.perms.battlemetrics,
+    moderation: mod,
+    battlemetrics: mod,
     manager: user.isManager
   };
 }

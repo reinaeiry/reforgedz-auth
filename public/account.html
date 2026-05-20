@@ -53,14 +53,15 @@ function clearErr() { err.classList.add("hidden"); }
 const PERM_LABELS = {
   admin: {
     replay:"Replay",
-    gmManagement:"GM Management"
+    gmManagement:"GM Management",
+    moderation:"Moderation panel"
   },
   transcripts: {
     read:"View transcripts",
     stats:"Admin stats",
     restricted:"Access Restricted Transcripts"
   },
-  battlemetrics: {
+  moderation: {
     viewServers:"View servers",
     viewPlayers:"View players",
     viewIps:"View IPs + manage IP bans",
@@ -70,15 +71,25 @@ const PERM_LABELS = {
     kick:"Kick",
     ban:"Ban",
     manage:"Manage (v2)"
+  },
+  moderationLogs: {
+    kill:"Kill logs",
+    death:"Death logs",
+    anticheat:"Anticheat logs",
+    shop:"Shop logs",
+    chat:"Chat logs",
+    base:"Base logs"
   }
 };
 
 function renderChips(perms) {
   const chips = [];
   if (perms.manager) chips.push(`<span class="chip mgr">Manager</span>`);
-  for (const k of Object.keys(PERM_LABELS.admin)) if (perms.admin[k]) chips.push(`<span class="chip on">Admin · ${PERM_LABELS.admin[k]}</span>`);
-  for (const k of Object.keys(PERM_LABELS.transcripts)) if (perms.transcripts[k]) chips.push(`<span class="chip on">Transcripts · ${PERM_LABELS.transcripts[k]}</span>`);
-  for (const k of Object.keys(PERM_LABELS.battlemetrics)) if (perms.battlemetrics && perms.battlemetrics[k]) chips.push(`<span class="chip on">BattleMetrics · ${PERM_LABELS.battlemetrics[k]}</span>`);
+  for (const k of Object.keys(PERM_LABELS.admin)) if (perms.admin && perms.admin[k]) chips.push(`<span class="chip on">Admin · ${PERM_LABELS.admin[k]}</span>`);
+  for (const k of Object.keys(PERM_LABELS.transcripts)) if (perms.transcripts && perms.transcripts[k]) chips.push(`<span class="chip on">Transcripts · ${PERM_LABELS.transcripts[k]}</span>`);
+  const mod = perms.moderation || perms.battlemetrics || {};
+  for (const k of Object.keys(PERM_LABELS.moderation)) if (mod[k]) chips.push(`<span class="chip on">Moderation · ${PERM_LABELS.moderation[k]}</span>`);
+  for (const k of Object.keys(PERM_LABELS.moderationLogs)) if (mod.logs && mod.logs[k]) chips.push(`<span class="chip on">Logs · ${PERM_LABELS.moderationLogs[k]}</span>`);
   if (chips.length === 0) chips.push(`<span class="chip">No access yet</span>`);
   return chips.join("");
 }

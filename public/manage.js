@@ -1,14 +1,15 @@
 const PERMS = {
   admin: [
     ["replay","Replay"],
-    ["gmManagement","GM Management"]
+    ["gmManagement","GM Management"],
+    ["moderation","Moderation panel access (gate)"]
   ],
   transcripts: [
     ["read","View transcripts"],
     ["stats","Admin stats"],
     ["restricted","Access Restricted Transcripts"]
   ],
-  battlemetrics: [
+  moderation: [
     ["viewServers","View server status"],
     ["viewPlayers","View players (name, GUID, Steam, hardware IDs, sessions)"],
     ["viewIps","View IPs (BM + in-game logs) + manage IP bans"],
@@ -18,8 +19,20 @@ const PERMS = {
     ["kick","Kick players"],
     ["ban","Ban players"],
     ["manage","Manage banlists / triggers (v2)"]
+  ],
+  // Sub-group: log-level filters. UI shows these as their own grid but the
+  // values write into perms.moderation.logs.<key>.
+  moderationLogs: [
+    ["kill","Kill logs"],
+    ["death","Death logs"],
+    ["anticheat","Anticheat logs"],
+    ["shop","Shop logs"],
+    ["chat","Chat logs"],
+    ["base","Base logs"]
   ]
 };
+
+const GROUPS = ["admin", "transcripts", "moderation", "moderationLogs"];
 
 const state = {
   me: null,
@@ -36,32 +49,46 @@ const hide = (el) => el.classList.add("hidden");
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmtDate = (ms) => ms ? new Date(ms).toLocaleString() : "—";
 
+function readGroupSource(group, perms) {
+  // moderationLogs draws/writes from perms.moderation.logs
+  if (group === "moderationLogs") return (perms.moderation && perms.moderation.logs) || {};
+  return perms[group] || {};
+}
+
 function buildPermGrid(containerId, group, perms, prefix) {
   const c = $(containerId);
   c.innerHTML = "";
+  const src = readGroupSource(group, perms);
   for (const [key, label] of PERMS[group]) {
     const id = `${prefix}_${group}_${key}`;
     const row = document.createElement("label");
-    row.innerHTML = `<input type="checkbox" id="${id}" ${perms[group] && perms[group][key] ? "checked" : ""}><span>${label}</span>`;
+    row.innerHTML = `<input type="checkbox" id="${id}" ${src[key] ? "checked" : ""}><span>${label}</span>`;
     c.appendChild(row);
   }
 }
 
 function readPermGrid(prefix) {
-  const out = { admin:{}, transcripts:{}, battlemetrics:{} };
-  for (const group of ["admin","transcripts","battlemetrics"]) {
+  const out = { admin:{}, transcripts:{}, moderation:{} };
+  out.moderation.logs = {};
+  for (const group of GROUPS) {
     for (const [key] of PERMS[group]) {
       const el = $(`${prefix}_${group}_${key}`);
-      out[group][key] = !!(el && el.checked);
+      const v = !!(el && el.checked);
+      if (group === "moderationLogs") out.moderation.logs[key] = v;
+      else out[group][key] = v;
     }
   }
   return out;
 }
 
 function emptyPerms() {
-  const out = { admin:{}, transcripts:{}, battlemetrics:{} };
-  for (const group of ["admin","transcripts","battlemetrics"]) {
-    for (const [key] of PERMS[group]) out[group][key] = false;
+  const out = { admin:{}, transcripts:{}, moderation:{} };
+  out.moderation.logs = {};
+  for (const group of GROUPS) {
+    for (const [key] of PERMS[group]) {
+      if (group === "moderationLogs") out.moderation.logs[key] = false;
+      else out[group][key] = false;
+    }
   }
   return out;
 }
@@ -88,9 +115,10 @@ function userMatchesFilter(u, q) {
   q = q.toLowerCase();
   if (u.username.toLowerCase().includes(q)) return true;
   if ((u.email || "").toLowerCase().includes(q)) return true;
-  for (const group of ["admin","transcripts","battlemetrics"]) {
+  for (const group of GROUPS) {
+    const src = readGroupSource(group, u.perms);
     for (const [key,label] of PERMS[group]) {
-      if (u.perms[group] && u.perms[group][key] && label.toLowerCase().includes(q)) return true;
+      if (src[key] && label.toLowerCase().includes(q)) return true;
     }
   }
   return false;
@@ -133,7 +161,8 @@ function selectUser(id) {
   $("esusp").checked = u.suspended;
   buildPermGrid("permAdmin", "admin", u.perms, "u");
   buildPermGrid("permTranscripts", "transcripts", u.perms, "u");
-  buildPermGrid("permBattlemetrics", "battlemetrics", u.perms, "u");
+  buildPermGrid("permModeration", "moderation", u.perms, "u");
+  buildPermGrid("permModerationLogs", "moderationLogs", u.perms, "u");
   renderUserList();
 }
 
@@ -269,7 +298,8 @@ function startNewInvite() {
   const empty = emptyPerms();
   buildPermGrid("iPermAdmin", "admin", empty, "i");
   buildPermGrid("iPermTranscripts", "transcripts", empty, "i");
-  buildPermGrid("iPermBattlemetrics", "battlemetrics", empty, "i");
+  buildPermGrid("iPermModeration", "moderation", empty, "i");
+  buildPermGrid("iPermModerationLogs", "moderationLogs", empty, "i");
 }
 
 async function createInvite() {
