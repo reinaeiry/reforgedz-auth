@@ -1,8 +1,7 @@
 const PERMS = {
   admin: [
     ["replay","Replay"],
-    ["gmManagement","GM Management"],
-    ["viewIngameIps","View ingame-log IPs (reserved)"]
+    ["gmManagement","GM Management"]
   ],
   transcripts: [
     ["read","View transcripts"],
@@ -11,9 +10,8 @@ const PERMS = {
   ],
   battlemetrics: [
     ["viewServers","View server status"],
-    ["viewPlayers","View players (basic)"],
-    ["viewSessions","View sessions / IPs / Steam (PII)"],
-    ["viewChat","View chat logs"],
+    ["viewPlayers","View players (name, GUID, Steam, hardware IDs, sessions)"],
+    ["viewIps","View IPs (BM + in-game logs) + manage IP bans"],
     ["viewActivity","View activity feed"],
     ["viewBans","View bans"],
     ["writeNotes","Write player notes"],

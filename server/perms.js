@@ -1,17 +1,16 @@
 const ADMIN_TOOLS = [
   "replay",
-  "gmManagement",
-  // Reserved for the future ingame-logs merge into /player/:guid — see plan.
-  "viewIngameIps"
+  "gmManagement"
 ];
 
 const TRANSCRIPT_PERMS = ["read", "stats", "restricted"];
 
+// `viewIps` is the single PII gate: BM IPs + in-game-log IPs + IP-ban CRUD.
+// Steam IDs, hardware IDs, and session history are surfaced under viewPlayers.
 const BATTLEMETRICS_PERMS = [
   "viewServers",
   "viewPlayers",
-  "viewSessions",
-  "viewChat",
+  "viewIps",
   "viewActivity",
   "viewBans",
   "writeNotes",
@@ -41,10 +40,18 @@ function normalizePerms(input) {
   }
   if (input.battlemetrics && typeof input.battlemetrics === "object") {
     for (const k of BATTLEMETRICS_PERMS) out.battlemetrics[k] = !!input.battlemetrics[k];
+    // Forward-migration: the old `viewSessions` (PII for IPs/Steam/hwid) is
+    // collapsed into `viewIps` (only IPs gated; Steam/hwid move under viewPlayers).
+    if (input.battlemetrics.viewSessions) out.battlemetrics.viewIps = true;
   }
-  // Forward-migration of the older restricted.access → transcripts.restricted.
+  // Forward-migration of older flags that no longer exist:
+  //   restricted.access   -> transcripts.restricted
+  //   admin.viewIngameIps -> battlemetrics.viewIps
   if (input.restricted && typeof input.restricted === "object" && input.restricted.access) {
     out.transcripts.restricted = true;
+  }
+  if (input.admin && input.admin.viewIngameIps) {
+    out.battlemetrics.viewIps = true;
   }
   return out;
 }
