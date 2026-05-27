@@ -58,7 +58,14 @@ const state = {
   invitations: [],
   selectedId: null,
   filter: "",
-  auditFilter: ""
+  auditFilter: "",
+  auditCat: "all",
+  auditActor: "",
+  auditAction: "",
+  auditSince: "",
+  auditUntil: "",
+  auditOffset: 0,
+  auditFacets: { categories: [], actors: [], actions: [] }
 };
 
 const $ = (id) => document.getElementById(id);
@@ -383,16 +390,70 @@ async function createInvite() {
 
 // ─── Audit log ───────────────────────────────────────────────────────────────
 
+const AUDIT_CATS = [
+  ["all", "All"],
+  ["bans", "Bans"],
+  ["mutes", "Mutes"],
+  ["kicks", "Kicks"],
+  ["ipbans", "IP Bans"],
+  ["notes", "Notes"],
+  ["tickets", "Tickets"],
+  ["views", "Views"],
+  ["gm", "GM / PQ"],
+  ["auth", "Auth"],
+  ["other", "Other"]
+];
+const AUDIT_PAGE_SIZE = 100;
+
+function renderAuditCats() {
+  const counts = {};
+  for (const c of state.auditFacets.categories || []) counts[c.category || "other"] = c.n;
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  $("auditCats").innerHTML = AUDIT_CATS.map(([key, label]) => {
+    const n = key === "all" ? total : (counts[key] || 0);
+    const active = state.auditCat === key ? " active" : "";
+    return `<button class="audit-cat${active}" data-cat="${key}">${label} <span class="audit-cat-n">${n}</span></button>`;
+  }).join("");
+  $("auditCats").querySelectorAll(".audit-cat").forEach((b) => {
+    b.addEventListener("click", () => {
+      state.auditCat = b.dataset.cat;
+      state.auditOffset = 0;
+      renderAuditCats();
+      loadAudit();
+    });
+  });
+}
+
+async function loadAuditFacets() {
+  const r = await fetch("/api/audit/facets", { credentials: "include" });
+  if (!r.ok) return;
+  state.auditFacets = await r.json();
+  // Populate actor + action dropdowns once.
+  const actorSel = $("auditActor");
+  actorSel.innerHTML = `<option value="">All admins</option>` +
+    (state.auditFacets.actors || []).map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+  const actionSel = $("auditAction");
+  actionSel.innerHTML = `<option value="">All actions</option>` +
+    (state.auditFacets.actions || []).map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+  renderAuditCats();
+}
+
 async function loadAudit() {
-  const params = new URLSearchParams({ limit: 200 });
+  const params = new URLSearchParams({ limit: AUDIT_PAGE_SIZE, offset: state.auditOffset || 0 });
   if (state.auditFilter) params.set("search", state.auditFilter);
+  if (state.auditCat && state.auditCat !== "all") params.set("category", state.auditCat);
+  if (state.auditActor) params.set("actor", state.auditActor);
+  if (state.auditAction) params.set("action", state.auditAction);
+  if (state.auditSince) params.set("sinceMs", String(new Date(state.auditSince + "T00:00:00").getTime()));
+  if (state.auditUntil) params.set("untilMs", String(new Date(state.auditUntil + "T23:59:59").getTime()));
   const r = await fetch("/api/audit?" + params, { credentials: "include" });
   if (!r.ok) return;
-  const { entries } = await r.json();
+  const { entries, total, offset } = await r.json();
   const list = $("auditList");
   list.innerHTML = "";
   if (entries.length === 0) {
     list.innerHTML = `<div style="color:var(--text-ghost);text-align:center;padding:24px">No audit entries.</div>`;
+    $("auditPager").innerHTML = "";
     return;
   }
   for (const e of entries) {
@@ -405,18 +466,31 @@ async function loadAudit() {
     if (e.ip) meta.push(`<code>${esc(e.ip)}</code>`);
     if (e.geo_label) meta.push(esc(e.geo_label));
     if (e.device_label) meta.push(esc(e.device_label));
+    const isView = (e.category === "views");
     row.innerHTML = `
       <div class="when">${fmtDate(e.at)}</div>
       <div class="who">${esc(e.actor_username || "—")}</div>
       <div class="what">
-        <strong>${esc(e.action)}</strong>
-        ${e.target_username && e.target_username !== e.actor_username ? ` → ${esc(e.target_username)}` : ""}
-        ${detail ? `<div style="color:var(--text-ghost);font-size:.78rem;margin-top:2px">${detail}</div>` : ""}
-        ${meta.length ? `<div style="color:var(--text-dim);font-size:.78rem;margin-top:2px">${meta.join(" · ")}</div>` : ""}
+        <span class="audit-action${isView ? " view" : ""}">${esc(e.action)}</span>
+        ${e.target_username && e.target_username !== e.actor_username ? ` <span class="audit-target">→ ${esc(e.target_username)}</span>` : ""}
+        ${detail ? `<div class="audit-detail">${detail}</div>` : ""}
+        ${meta.length ? `<div class="audit-meta">${meta.join(" · ")}</div>` : ""}
       </div>
     `;
     list.appendChild(row);
   }
+  // Pager.
+  const from = (offset || 0) + 1;
+  const to = (offset || 0) + entries.length;
+  const hasPrev = (offset || 0) > 0;
+  const hasNext = to < (total || 0);
+  $("auditPager").innerHTML = `
+    <button class="btn ghost" id="auditPrev" ${hasPrev ? "" : "disabled"}>← Newer</button>
+    <span class="audit-count">${from}–${to} of ${total || 0}</span>
+    <button class="btn ghost" id="auditNext" ${hasNext ? "" : "disabled"}>Older →</button>
+  `;
+  if (hasPrev) $("auditPrev").addEventListener("click", () => { state.auditOffset = Math.max(0, (state.auditOffset || 0) - AUDIT_PAGE_SIZE); loadAudit(); });
+  if (hasNext) $("auditNext").addEventListener("click", () => { state.auditOffset = (state.auditOffset || 0) + AUDIT_PAGE_SIZE; loadAudit(); });
 }
 
 // ─── Wire-up ─────────────────────────────────────────────────────────────────
@@ -430,7 +504,7 @@ function setupTabs() {
       $("tab-users").classList.toggle("hidden", tab !== "users");
       $("tab-invites").classList.toggle("hidden", tab !== "invites");
       $("tab-audit").classList.toggle("hidden", tab !== "audit");
-      if (tab === "audit") loadAudit();
+      if (tab === "audit") { loadAuditFacets(); loadAudit(); }
       if (tab === "invites") loadInvitations();
     });
   });
@@ -438,9 +512,19 @@ function setupTabs() {
 
 function setupBindings() {
   $("reloadBtn").addEventListener("click", loadUsers);
-  $("auditReload").addEventListener("click", loadAudit);
+  $("auditReload").addEventListener("click", () => { loadAuditFacets(); loadAudit(); });
   $("filter").addEventListener("input", (e) => { state.filter = e.target.value; renderUserList(); });
-  $("auditFilter").addEventListener("input", (e) => { state.auditFilter = e.target.value; loadAudit(); });
+  let auditDebounce;
+  $("auditFilter").addEventListener("input", (e) => {
+    state.auditFilter = e.target.value;
+    state.auditOffset = 0;
+    clearTimeout(auditDebounce);
+    auditDebounce = setTimeout(loadAudit, 250);
+  });
+  $("auditActor").addEventListener("change", (e) => { state.auditActor = e.target.value; state.auditOffset = 0; loadAudit(); });
+  $("auditAction").addEventListener("change", (e) => { state.auditAction = e.target.value; state.auditOffset = 0; loadAudit(); });
+  $("auditSince").addEventListener("change", (e) => { state.auditSince = e.target.value; state.auditOffset = 0; loadAudit(); });
+  $("auditUntil").addEventListener("change", (e) => { state.auditUntil = e.target.value; state.auditOffset = 0; loadAudit(); });
   $("saveBtn").addEventListener("click", saveUser);
   $("resetBtn").addEventListener("click", resetPassword);
   $("revokeBtn").addEventListener("click", revokeSessions);

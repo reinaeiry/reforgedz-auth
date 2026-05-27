@@ -154,11 +154,17 @@
 </section>
 
 <section class="page hidden" id="tab-audit">
-  <div class="toolbar">
-    <input class="input" id="auditFilter" placeholder="Filter by user, action, IP, location, device…" />
+  <div class="audit-cats" id="auditCats"></div>
+  <div class="toolbar audit-toolbar">
+    <input class="input" id="auditFilter" placeholder="Search text (user, action, target, IP, detail)…" />
+    <select class="input" id="auditActor"><option value="">All admins</option></select>
+    <select class="input" id="auditAction"><option value="">All actions</option></select>
+    <input class="input" id="auditSince" type="date" title="From date" />
+    <input class="input" id="auditUntil" type="date" title="To date" />
     <button class="btn ghost" id="auditReload">Reload</button>
   </div>
   <div class="panel" id="auditList"></div>
+  <div class="audit-pager" id="auditPager"></div>
 </section>
 
 <script src="/manage.js"></script>

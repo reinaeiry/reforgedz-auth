@@ -113,11 +113,42 @@ function backfillAuditColumns() {
     geo_country: "TEXT",
     geo_region: "TEXT",
     geo_city: "TEXT",
-    geo_label: "TEXT"
+    geo_label: "TEXT",
+    category: "TEXT"
   };
   for (const [name, type] of Object.entries(need)) {
     if (!cols.includes(name)) db.exec(`ALTER TABLE audit_log ADD COLUMN ${name} ${type}`);
   }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_audit_category ON audit_log(category)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_username)");
+  // One-time backfill: derive category for any rows logged before the
+  // column existed.
+  const missing = db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE category IS NULL").get().n;
+  if (missing > 0) {
+    const rows = db.prepare("SELECT id, action FROM audit_log WHERE category IS NULL").all();
+    const upd = db.prepare("UPDATE audit_log SET category = ? WHERE id = ?");
+    const tx = db.transaction(() => {
+      for (const r of rows) upd.run(categorizeAction(r.action), r.id);
+    });
+    tx();
+  }
+}
+
+// Bucket an action string into a UI category. Keep in sync with the tab
+// list in public/manage.js.
+function categorizeAction(action) {
+  const a = String(action || "");
+  if (a.startsWith("view.")) return "views";
+  if (a.startsWith("ingame.mute")) return "mutes";
+  if (a.startsWith("ingame.ban") || a.startsWith("bm.ban")) return "bans";
+  if (a.startsWith("ipban")) return "ipbans";
+  if (a === "bm.kick") return "kicks";
+  if (a.startsWith("bm.note")) return "notes";
+  if (a.startsWith("ticket")) return "tickets";
+  if (a.startsWith("gm.") || a.startsWith("adminmgr") || a.startsWith("priorityqueue")) return "gm";
+  // Auth-side account/session activity.
+  if (/^(login|logout|password|session|invite|user\.|perms|twofa|2fa|email|manager)/.test(a)) return "auth";
+  return "other";
 }
 
 function rowToUser(row) {
@@ -275,15 +306,16 @@ function logAudit({ actorId, actorUsername, action, targetUserId, targetUsername
   open()
     .prepare(
       `INSERT INTO audit_log
-       (actor_id, actor_username, action, target_user_id, target_username, detail_json,
+       (actor_id, actor_username, action, category, target_user_id, target_username, detail_json,
         ip, ua, browser, os, device, device_label,
         geo_country, geo_region, geo_city, geo_label, at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       actorId || null,
       actorUsername || null,
       action,
+      categorizeAction(action),
       targetUserId || null,
       targetUsername || null,
       detail ? JSON.stringify(detail) : null,
@@ -301,21 +333,37 @@ function logAudit({ actorId, actorUsername, action, targetUserId, targetUsername
     );
 }
 
-function listAudit({ limit = 100, offset = 0, search } = {}) {
-  let where = "";
+// Filterable + paginated audit query. Returns { entries, total }.
+function listAudit({ limit = 100, offset = 0, search, category, actor, action, sinceMs, untilMs } = {}) {
+  const where = [];
   const params = [];
   if (search && search.trim()) {
-    where = `WHERE (actor_username LIKE ? OR target_username LIKE ? OR action LIKE ? OR ip LIKE ? OR geo_label LIKE ? OR device_label LIKE ?)`;
+    where.push("(actor_username LIKE ? OR target_username LIKE ? OR action LIKE ? OR ip LIKE ? OR geo_label LIKE ? OR device_label LIKE ? OR detail_json LIKE ?)");
     const s = `%${search.trim()}%`;
-    params.push(s, s, s, s, s, s);
+    params.push(s, s, s, s, s, s, s);
   }
-  return open()
-    .prepare(`SELECT * FROM audit_log ${where} ORDER BY at DESC LIMIT ? OFFSET ?`)
-    .all(...params, limit, offset)
-    .map((r) => ({
-      ...r,
-      detail: r.detail_json ? safeParse(r.detail_json) : null
-    }));
+  if (category && category !== "all") { where.push("category = ?"); params.push(category); }
+  if (actor && actor.trim()) { where.push("actor_username = ? COLLATE NOCASE"); params.push(actor.trim()); }
+  if (action && action.trim()) { where.push("action = ?"); params.push(action.trim()); }
+  if (sinceMs) { where.push("at >= ?"); params.push(+sinceMs); }
+  if (untilMs) { where.push("at <= ?"); params.push(+untilMs); }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  const total = open().prepare(`SELECT COUNT(*) AS n FROM audit_log ${whereSql}`).get(...params).n;
+  const entries = open()
+    .prepare(`SELECT * FROM audit_log ${whereSql} ORDER BY at DESC LIMIT ? OFFSET ?`)
+    .all(...params, Math.min(+limit || 100, 500), Math.max(+offset || 0, 0))
+    .map((r) => ({ ...r, detail: r.detail_json ? safeParse(r.detail_json) : null }));
+  return { entries, total };
+}
+
+// Distinct values for the filter dropdowns + per-category counts.
+function auditFacets() {
+  const db2 = open();
+  const categories = db2.prepare("SELECT category, COUNT(*) AS n FROM audit_log GROUP BY category").all();
+  const actors = db2.prepare("SELECT DISTINCT actor_username FROM audit_log WHERE actor_username IS NOT NULL ORDER BY actor_username COLLATE NOCASE").all().map((r) => r.actor_username);
+  const actions = db2.prepare("SELECT DISTINCT action FROM audit_log ORDER BY action").all().map((r) => r.action);
+  return { categories, actors, actions };
 }
 
 function createPendingLogin({ userId, codeHash, purpose, ttlMs, ip, ua }) {
@@ -420,6 +468,7 @@ module.exports = {
   invalidateUserTokens,
   logAudit,
   listAudit,
+  auditFacets,
   createPendingLogin,
   getPendingLogin,
   consumePendingLogin,
